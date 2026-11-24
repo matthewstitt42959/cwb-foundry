@@ -23,6 +23,35 @@ export const defs: CardDefs = {
     power: 2,
     toughness: 2,
   },
+  giant: { id: "giant", game: "test", name: "Test Giant", types: ["creature"], power: 4, toughness: 4 },
+  hawk: {
+    id: "hawk",
+    game: "test",
+    name: "Test Hawk",
+    types: ["creature"],
+    power: 1,
+    toughness: 1,
+    keywords: ["flying"],
+  },
+  sprinter: {
+    id: "sprinter",
+    game: "test",
+    name: "Test Sprinter",
+    types: ["creature"],
+    cost: { R: 1 },
+    power: 2,
+    toughness: 1,
+    keywords: ["haste"],
+  },
+  guard: {
+    id: "guard",
+    game: "test",
+    name: "Test Guard",
+    types: ["creature"],
+    power: 2,
+    toughness: 2,
+    keywords: ["vigilance"],
+  },
   bolt: {
     id: "bolt",
     game: "test",
@@ -83,7 +112,7 @@ export function give(
 ): { state: GameState; id: CardId } {
   const s = clone(state);
   const id = `${player}:t${counter++}`;
-  s.cards[id] = { id, defId, owner: player, tapped: false };
+  s.cards[id] = { id, defId, owner: player, tapped: false, damage: 0, enteredTurn: 0 };
   s.players[player]?.[zone].push(id);
   return { state: s, id };
 }

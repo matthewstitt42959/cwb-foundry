@@ -29,12 +29,20 @@ npm run build
 - Land drops, coloured and generic mana payment, sorcery-speed vs. instant-speed timing
 - Declarative effects: `damage`, `draw`, `gain_life`
 - Win conditions: life reaching 0, drawing from an empty library
+- Combat: declare attackers, declare blockers, simultaneous combat damage
+  - Declarations are their own actions (`DECLARE_ATTACKERS`, `DECLARE_BLOCKERS`); passing is illegal until they're made
+  - Summoning sickness, tapped creatures, damage that wears off at cleanup, creatures dying to lethal damage
+  - Several blockers on one attacker: lethal damage assigned in declaration order, excess to the last
+  - Keywords: `haste`, `flying`, `vigilance`
+  - Combat is skipped when nobody can attack
+
+`getLegalActions` lists the empty declaration, each single choice and "everything attacks" during a declaration. For other combinations use `attackCandidates` / `blockCandidates` and build the action yourself.
 
 ## Not built yet (roadmap)
 
-1. Combat: attacking, blocking, damage. The phase exists but does nothing.
-2. Targeting: effects currently use fixed `opponent` / `self` targets.
-3. Cleanup step (discard to hand size) and more than two players.
+1. More combat: first strike, trample, menace, player-chosen damage assignment order.
+2. Targeting: effects currently use fixed `opponent` / `self` targets, so burn can't hit creatures yet.
+3. Discard to hand size at cleanup, and more than two players.
 4. Scryfall importer and a card definition format richer than the current one.
 5. Playable board UI and a basic AI opponent.
 6. Deck builder, then a card editor for custom cards.

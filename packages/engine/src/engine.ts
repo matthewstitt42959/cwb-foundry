@@ -1,4 +1,15 @@
 import { clone } from "./clone";
+import {
+  attackCandidates,
+  blockCandidates,
+  clearDamage,
+  declareAttackers,
+  declarer,
+  destroyDeadCreatures,
+  resolveCombatDamage,
+  validateAttackers,
+  validateBlocks,
+} from "./combat";
 import { applyEffect, checkState, drawCards } from "./effects";
 import { planPayment } from "./mana";
 import { shuffle } from "./rng";
@@ -32,7 +43,7 @@ export function createGame(rules: Ruleset, setup: GameSetup): GameState {
     list.forEach((defId, i) => {
       if (!rules.defs[defId]) throw new Error(`Unknown card definition "${defId}" in ${pid}'s deck`);
       const id = `${pid}:${i}`;
-      cards[id] = { id, defId, owner: pid, tapped: false };
+      cards[id] = { id, defId, owner: pid, tapped: false, damage: 0, enteredTurn: 0 };
       ids.push(id);
     });
     const shuffled = shuffle(ids, rngState);
@@ -61,6 +72,8 @@ export function createGame(rules: Ruleset, setup: GameSetup): GameState {
     priority: first,
     passes: 0,
     stack: [],
+    combat: null,
+    pending: null,
     rngState,
     over: false,
     winner: null,
@@ -86,22 +99,55 @@ function enterPhase(rules: Ruleset, state: GameState): void {
     const phase = rules.pack.phases[state.phaseIndex];
     if (!phase) throw new Error(`Rule pack "${rules.pack.id}" has no phase at index ${state.phaseIndex}`);
 
-    if (phase.onEnter === "untap") {
-      for (const id of state.players[state.activePlayer]?.battlefield ?? []) {
-        const inst = state.cards[id];
-        if (inst) inst.tapped = false;
-      }
-    } else if (phase.onEnter === "draw") {
-      const skip = state.turn === 1 && !rules.pack.drawOnFirstTurn;
-      if (!skip) drawCards(state, state.activePlayer, 1);
+    let gives = phase.hasPriority;
+
+    switch (phase.onEnter) {
+      case "untap":
+        for (const id of state.players[state.activePlayer]?.battlefield ?? []) {
+          const inst = state.cards[id];
+          if (inst) inst.tapped = false;
+        }
+        break;
+      case "draw":
+        if (!(state.turn === 1 && !rules.pack.drawOnFirstTurn)) drawCards(state, state.activePlayer, 1);
+        break;
+      case "declare_attackers":
+        state.combat = null;
+        state.pending = null;
+        if (attackCandidates(rules, state).length > 0) {
+          state.pending = "attackers";
+        } else {
+          gives = false; // nobody can attack: skip combat entirely
+        }
+        break;
+      case "declare_blockers":
+        if (!state.combat || state.combat.attackers.length === 0) {
+          gives = false;
+        } else if (blockCandidates(rules, state).length > 0) {
+          state.pending = "blockers";
+        }
+        break;
+      case "combat_damage":
+        if (!state.combat || state.combat.attackers.length === 0) {
+          gives = false;
+        } else {
+          resolveCombatDamage(rules, state);
+          destroyDeadCreatures(rules, state);
+          state.combat = null;
+        }
+        break;
+      case "cleanup":
+        clearDamage(state);
+        state.combat = null;
+        break;
     }
 
     checkState(state);
     if (state.over) return;
 
-    state.priority = state.activePlayer;
+    state.priority = declarer(state) ?? state.activePlayer;
     state.passes = 0;
-    if (phase.hasPriority) return;
+    if (gives) return;
     advancePhase(rules, state, false);
   }
 }
@@ -129,12 +175,14 @@ function resolveTop(rules: Ruleset, state: GameState): void {
 
   if (def.types.includes("creature")) {
     owner.battlefield.push(inst.id);
+    inst.enteredTurn = state.turn;
     state.log.push(`${def.name} enters the battlefield`);
   } else {
     state.log.push(`${def.name} resolves`);
     for (const effect of def.effects ?? []) applyEffect(state, effect, item.controller);
     owner.graveyard.push(inst.id);
   }
+  destroyDeadCreatures(rules, state);
   checkState(state);
 }
 
@@ -143,6 +191,22 @@ function resolveTop(rules: Ruleset, state: GameState): void {
 /** Returns an error message if `action` is illegal, or null if it is legal. */
 export function validateAction(rules: Ruleset, state: GameState, action: Action): string | null {
   if (state.over) return "The game is over";
+
+  // While a declaration is pending, only that declaration is legal.
+  if (state.pending) {
+    if (action.player !== declarer(state)) return "Waiting for the other player to declare";
+    if (action.type === "DECLARE_ATTACKERS" && state.pending === "attackers") {
+      return validateAttackers(rules, state, action.attackers);
+    }
+    if (action.type === "DECLARE_BLOCKERS" && state.pending === "blockers") {
+      return validateBlocks(rules, state, action.blocks);
+    }
+    return state.pending === "attackers" ? "Declare attackers first" : "Declare blockers first";
+  }
+  if (action.type === "DECLARE_ATTACKERS" || action.type === "DECLARE_BLOCKERS") {
+    return "Not declaring now";
+  }
+
   if (state.priority !== action.player) return "You do not have priority";
   const me = state.players[action.player];
   if (!me) return "Unknown player";
@@ -177,6 +241,30 @@ export function getLegalActions(rules: Ruleset, state: GameState): Action[] {
   const player = state.priority;
   const me = state.players[player];
   if (!me) return [];
+
+  // Declarations: the full set of combinations is exponential, so list the empty
+  // declaration, each single choice, and (for attackers) "everything attacks".
+  // Use attackCandidates / blockCandidates for custom combinations.
+  if (state.pending === "attackers") {
+    const all = attackCandidates(rules, state);
+    const options: Action[] = [
+      { type: "DECLARE_ATTACKERS", player, attackers: [] },
+      ...all.map((id): Action => ({ type: "DECLARE_ATTACKERS", player, attackers: [id] })),
+    ];
+    if (all.length > 1) options.push({ type: "DECLARE_ATTACKERS", player, attackers: all });
+    return options;
+  }
+  if (state.pending === "blockers") {
+    const options: Action[] = [{ type: "DECLARE_BLOCKERS", player, blocks: [] }];
+    for (const blocker of blockCandidates(rules, state)) {
+      for (const attacker of state.combat?.attackers ?? []) {
+        const a: Action = { type: "DECLARE_BLOCKERS", player, blocks: [{ blocker, attacker }] };
+        if (validateAction(rules, state, a) === null) options.push(a);
+      }
+    }
+    return options;
+  }
+
   const candidates: Action[] = [{ type: "PASS", player }];
   for (const cardId of me.hand) {
     candidates.push({ type: "PLAY_LAND", player, cardId }, { type: "CAST", player, cardId });
@@ -195,6 +283,27 @@ export function applyAction(rules: Ruleset, state: GameState, action: Action): A
   const me = next.players[action.player] as PlayerState;
 
   switch (action.type) {
+    case "DECLARE_ATTACKERS": {
+      next.pending = null;
+      next.passes = 0;
+      if (action.attackers.length === 0) {
+        next.combat = null;
+        next.log.push(`${action.player} declares no attackers`);
+        advancePhase(rules, next); // no attackers: skip the rest of combat
+      } else {
+        declareAttackers(rules, next, action.attackers);
+        next.priority = next.activePlayer;
+      }
+      break;
+    }
+    case "DECLARE_BLOCKERS": {
+      next.pending = null;
+      next.passes = 0;
+      if (next.combat) next.combat.blocks = [...action.blocks];
+      for (const b of action.blocks) next.log.push(`${b.blocker} blocks ${b.attacker}`);
+      next.priority = next.activePlayer;
+      break;
+    }
     case "PLAY_LAND": {
       me.hand.splice(me.hand.indexOf(action.cardId), 1);
       me.battlefield.push(action.cardId);

@@ -27,6 +27,13 @@ export type Effect =
 
 export type CardType = "land" | "creature" | "instant" | "sorcery";
 
+/**
+ * Evergreen keywords the engine understands.
+ * haste: may attack the turn it enters. flying: can only be blocked by flyers.
+ * vigilance: attacking doesn't tap it.
+ */
+export type Keyword = "haste" | "flying" | "vigilance";
+
 /** A card definition. `game` lets one engine host cards from different games. */
 export interface CardDef {
   id: DefId;
@@ -38,12 +45,19 @@ export interface CardDef {
   produces?: Color;
   power?: number;
   toughness?: number;
+  keywords?: Keyword[];
   effects?: Effect[];
 }
 
 export type CardDefs = Record<DefId, CardDef>;
 
-export type PhaseHook = "untap" | "draw";
+export type PhaseHook =
+  | "untap"
+  | "draw"
+  | "declare_attackers"
+  | "declare_blockers"
+  | "combat_damage"
+  | "cleanup";
 
 export interface PhaseDef {
   id: string;
@@ -82,6 +96,21 @@ export interface CardInstance {
   defId: DefId;
   owner: PlayerId;
   tapped: boolean;
+  /** Damage marked this turn; cleared in cleanup. */
+  damage: number;
+  /** Turn number on which it entered the battlefield (for summoning sickness). */
+  enteredTurn: number;
+}
+
+export interface BlockAssignment {
+  blocker: CardId;
+  attacker: CardId;
+}
+
+export interface CombatState {
+  attackers: CardId[];
+  /** Order matters: an attacker assigns damage to its blockers in this order. */
+  blocks: BlockAssignment[];
 }
 
 export interface StackItem {
@@ -102,6 +131,9 @@ export interface GameState {
   /** Consecutive passes since the last action. */
   passes: number;
   stack: StackItem[];
+  combat: CombatState | null;
+  /** Set while a player must declare attackers or blockers before anyone gets priority. */
+  pending: "attackers" | "blockers" | null;
   rngState: number;
   over: boolean;
   winner: PlayerId | null;
@@ -111,7 +143,9 @@ export interface GameState {
 export type Action =
   | { type: "PASS"; player: PlayerId }
   | { type: "PLAY_LAND"; player: PlayerId; cardId: CardId }
-  | { type: "CAST"; player: PlayerId; cardId: CardId };
+  | { type: "CAST"; player: PlayerId; cardId: CardId }
+  | { type: "DECLARE_ATTACKERS"; player: PlayerId; attackers: CardId[] }
+  | { type: "DECLARE_BLOCKERS"; player: PlayerId; blocks: BlockAssignment[] };
 
 export type ApplyResult =
   | { ok: true; state: GameState }
