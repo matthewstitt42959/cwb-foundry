@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // The engine ships as TypeScript source inside the workspace.
-  transpilePackages: ["@cwb/engine"],
+  // Workspace packages ship as TypeScript source.
+  transpilePackages: ["@cwb/engine", "@cwb/cards", "@cwb/ai"],
 };
 
 export default nextConfig;

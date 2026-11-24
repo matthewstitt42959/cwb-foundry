@@ -20,10 +20,18 @@ export interface ManaCost {
  * means adding a variant here and a handler in effects.ts, not editing the turn loop.
  * Targeting is not modelled yet: "opponent" / "self" are fixed targets.
  */
+export type PlayerTargetSpec = "opponent" | "self";
+/** "any" = a player or a creature, chosen on cast; "creature" = a creature, chosen on cast. */
+export type ChosenTargetSpec = "any" | "creature";
+
 export type Effect =
-  | { kind: "damage"; amount: number; target: "opponent" | "self" }
-  | { kind: "draw"; amount: number; target: "opponent" | "self" }
-  | { kind: "gain_life"; amount: number; target: "opponent" | "self" };
+  | { kind: "damage"; amount: number; target: PlayerTargetSpec | ChosenTargetSpec }
+  | { kind: "draw"; amount: number; target: PlayerTargetSpec }
+  | { kind: "gain_life"; amount: number; target: PlayerTargetSpec }
+  | { kind: "destroy"; target: "creature" };
+
+/** A target picked when a spell is cast. */
+export type Target = { kind: "player"; id: PlayerId } | { kind: "card"; id: CardId };
 
 export type CardType = "land" | "creature" | "instant" | "sorcery";
 
@@ -116,6 +124,8 @@ export interface CombatState {
 export interface StackItem {
   cardId: CardId;
   controller: PlayerId;
+  /** Chosen targets (at most one for now). Empty for untargeted spells. */
+  targets: Target[];
 }
 
 export interface GameState {
@@ -143,7 +153,7 @@ export interface GameState {
 export type Action =
   | { type: "PASS"; player: PlayerId }
   | { type: "PLAY_LAND"; player: PlayerId; cardId: CardId }
-  | { type: "CAST"; player: PlayerId; cardId: CardId }
+  | { type: "CAST"; player: PlayerId; cardId: CardId; targets?: Target[] }
   | { type: "DECLARE_ATTACKERS"; player: PlayerId; attackers: CardId[] }
   | { type: "DECLARE_BLOCKERS"; player: PlayerId; blocks: BlockAssignment[] };
 

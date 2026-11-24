@@ -60,6 +60,22 @@ export const defs: CardDefs = {
     cost: { R: 1 },
     effects: [{ kind: "damage", amount: 3, target: "opponent" }],
   },
+  shock: {
+    id: "shock",
+    game: "test",
+    name: "Test Shock",
+    types: ["instant"],
+    cost: { R: 1 },
+    effects: [{ kind: "damage", amount: 2, target: "any" }],
+  },
+  smite: {
+    id: "smite",
+    game: "test",
+    name: "Test Smite",
+    types: ["instant"],
+    cost: { generic: 1 },
+    effects: [{ kind: "destroy", target: "creature" }],
+  },
   tonic: {
     id: "tonic",
     game: "test",

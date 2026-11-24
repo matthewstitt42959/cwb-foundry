@@ -11,6 +11,7 @@ import {
   validateBlocks,
 } from "./combat";
 import { applyEffect, checkState, drawCards } from "./effects";
+import { isLegalTarget, legalTargets, targetSpecOf } from "./targeting";
 import { planPayment } from "./mana";
 import { shuffle } from "./rng";
 import type {
@@ -178,8 +179,14 @@ function resolveTop(rules: Ruleset, state: GameState): void {
     inst.enteredTurn = state.turn;
     state.log.push(`${def.name} enters the battlefield`);
   } else {
-    state.log.push(`${def.name} resolves`);
-    for (const effect of def.effects ?? []) applyEffect(state, effect, item.controller);
+    const spec = targetSpecOf(def);
+    const target = item.targets[0];
+    if (spec && !(target && isLegalTarget(rules, state, spec, target))) {
+      state.log.push(`${def.name} fizzles (its target is gone)`);
+    } else {
+      state.log.push(`${def.name} resolves`);
+      for (const effect of def.effects ?? []) applyEffect(rules, state, effect, item.controller, item.targets);
+    }
     owner.graveyard.push(inst.id);
   }
   destroyDeadCreatures(rules, state);
@@ -233,6 +240,16 @@ export function validateAction(rules: Ruleset, state: GameState, action: Action)
   const isInstant = def.types.includes("instant");
   if (!isInstant && !sorcerySpeed) return "Only instants can be cast now";
   if (!planPayment(rules, state, action.player, def.cost)) return "Cannot pay the cost";
+
+  const spec = targetSpecOf(def);
+  const targets = action.targets ?? [];
+  if (spec) {
+    const t = targets[0];
+    if (targets.length !== 1 || !t) return "Choose a target";
+    if (!isLegalTarget(rules, state, spec, t)) return "Invalid target";
+  } else if (targets.length > 0) {
+    return "This spell has no targets";
+  }
   return null;
 }
 
@@ -267,7 +284,16 @@ export function getLegalActions(rules: Ruleset, state: GameState): Action[] {
 
   const candidates: Action[] = [{ type: "PASS", player }];
   for (const cardId of me.hand) {
-    candidates.push({ type: "PLAY_LAND", player, cardId }, { type: "CAST", player, cardId });
+    candidates.push({ type: "PLAY_LAND", player, cardId });
+    const inst = state.cards[cardId];
+    const def = inst && rules.defs[inst.defId];
+    if (def && targetSpecOf(def)) {
+      for (const t of legalTargets(rules, state, def)) {
+        candidates.push({ type: "CAST", player, cardId, targets: [t] });
+      }
+    } else {
+      candidates.push({ type: "CAST", player, cardId });
+    }
   }
   return candidates.filter((a) => validateAction(rules, state, a) === null);
 }
@@ -300,7 +326,11 @@ export function applyAction(rules: Ruleset, state: GameState, action: Action): A
       next.pending = null;
       next.passes = 0;
       if (next.combat) next.combat.blocks = [...action.blocks];
-      for (const b of action.blocks) next.log.push(`${b.blocker} blocks ${b.attacker}`);
+      const nameOf = (id: CardId) => {
+        const inst = next.cards[id];
+        return (inst && rules.defs[inst.defId]?.name) ?? id;
+      };
+      for (const b of action.blocks) next.log.push(`${nameOf(b.blocker)} blocks ${nameOf(b.attacker)}`);
       next.priority = next.activePlayer;
       break;
     }
@@ -322,7 +352,7 @@ export function applyAction(rules: Ruleset, state: GameState, action: Action): A
         if (land) land.tapped = true;
       }
       me.hand.splice(me.hand.indexOf(action.cardId), 1);
-      next.stack.push({ cardId: action.cardId, controller: action.player });
+      next.stack.push({ cardId: action.cardId, controller: action.player, targets: action.targets ?? [] });
       // After casting, the caster receives priority again and everyone may respond.
       next.passes = 0;
       next.log.push(`${action.player} casts ${def.name}`);
