@@ -1,11 +1,21 @@
-import { applyAction, getLegalActions, mtgPack, type GameState, type Ruleset } from "@cwb/engine";
+import {
+  applyAction,
+  getLegalActions,
+  mtgPack,
+  type CardDefs,
+  type GameState,
+  type Ruleset,
+} from "@cwb/engine";
 import { starterDefs } from "@cwb/cards";
 import { chooseAction } from "@cwb/ai";
 
 export const HUMAN = "you";
 export const BOT = "ai";
 
-export const rules: Ruleset = { pack: mtgPack, defs: starterDefs };
+/** Rules for one game: the MTG-style pack plus the starter cards and any imported ones. */
+export function makeRules(extraDefs: CardDefs = {}): Ruleset {
+  return { pack: mtgPack, defs: { ...starterDefs, ...extraDefs } };
+}
 
 export interface DriverOptions {
   /** If true, the human gets priority at every step. If false, empty steps are skipped. */
@@ -18,7 +28,7 @@ export interface DriverOptions {
  * legal action besides passing, and (unless stopEverywhere) at quiet steps where the
  * stack is empty and it isn't one of their own main phases.
  */
-export function autoplay(state: GameState, opts: DriverOptions): GameState {
+export function autoplay(rules: Ruleset, state: GameState, opts: DriverOptions): GameState {
   let s = state;
   for (let i = 0; i < 2000 && !s.over; i++) {
     if (s.priority === BOT) {

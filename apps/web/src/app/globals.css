@@ -101,6 +101,66 @@ body {
   font: inherit;
 }
 
+.import {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 4px 18px 18px;
+  margin: 8px 0 24px;
+}
+.import textarea {
+  width: 100%;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  font: 0.9rem ui-monospace, SFMono-Regular, Menlo, monospace;
+  resize: vertical;
+}
+.import-actions {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+}
+.report .rows {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  font-size: 0.88rem;
+}
+.report .rows li {
+  display: flex;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid #1d1d25;
+}
+.report .rows .mark {
+  width: 1.2em;
+  text-align: center;
+}
+.report .rows li.ok .mark {
+  color: var(--good);
+}
+.report .rows li.unsupported .mark,
+.report .rows li.not_found .mark {
+  color: #ff7a7a;
+}
+.reason {
+  color: var(--dim);
+}
+.error {
+  color: #ff7a7a;
+}
+.warn {
+  color: var(--warn);
+  font-size: 0.88rem;
+}
+.credit {
+  margin-top: 32px;
+  font-size: 0.75rem;
+}
+
 /* ---- game ---- */
 .game {
   min-height: 100vh;
@@ -324,6 +384,24 @@ body {
   border-radius: 999px;
   padding: 1px 8px;
   font-weight: 600;
+}
+.card.has-art {
+  padding: 0;
+  min-height: 0;
+  background: #000;
+  overflow: visible;
+}
+.card-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.card-pt.overlay {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.85);
 }
 .card.tapped {
   opacity: 0.55;

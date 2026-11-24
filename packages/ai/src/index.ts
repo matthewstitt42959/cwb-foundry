@@ -167,36 +167,48 @@ function scoreSpell(
   if (def.types.includes("creature")) return 20 + cost * 3 + (def.power ?? 0) + (def.toughness ?? 0);
 
   const target = a.targets?.[0];
-  let score = 0;
+  // Damage/destroy decide whether a spell is worth casting at all; drawing and life gain are
+  // bonuses on top, so a compound spell isn't judged by whichever clause happens to come last.
+  let main = 0;
+  let hasMain = false;
+  let bonus = 0;
+  let onlyLifeGain = true;
   for (const e of def.effects ?? []) {
+    if (e.kind !== "gain_life") onlyLifeGain = false;
     switch (e.kind) {
       case "damage": {
-        if (e.target === "opponent") return e.amount >= oppLife ? 1000 : 4;
+        hasMain = true;
+        if (e.target === "opponent") {
+          main += e.amount >= oppLife ? 1000 : 4;
+          break;
+        }
         if (!target) return 0;
         if (target.kind === "player") {
           if (target.id === me) return -1;
-          score = e.amount >= oppLife ? 1000 : 3; // face burn only as a low-priority fallback
+          main += e.amount >= oppLife ? 1000 : 3; // face burn only as a low-priority fallback
         } else {
-          const owner = state.cards[target.id]?.owner;
-          if (owner === me) return -1;
-          score = e.amount >= toughnessLeft(rules, state, target.id) ? 40 + value(rules, state, target.id) - cost * 3 : -1;
+          if (state.cards[target.id]?.owner === me) return -1;
+          if (e.amount < toughnessLeft(rules, state, target.id)) return -1; // wouldn't kill it
+          main += 40 + value(rules, state, target.id) - cost * 3;
         }
         break;
       }
       case "destroy": {
+        hasMain = true;
         if (!target || target.kind !== "card" || state.cards[target.id]?.owner === me) return -1;
-        score = 45 + value(rules, state, target.id) - cost * 3;
+        main += 45 + value(rules, state, target.id) - cost * 3;
         break;
       }
       case "draw":
-        score = e.target === "self" ? 12 : -1;
+        bonus += e.target === "self" ? 12 : -100;
         break;
       case "gain_life":
-        score = e.target === "self" && myLife <= 10 ? 15 : -1;
+        bonus += e.target === "self" ? (myLife <= 10 ? 15 : 2) : -100;
         break;
     }
   }
-  return score;
+  if (!hasMain && onlyLifeGain && myLife > 10) return -1; // standalone life gain only when hurting
+  return main + bonus;
 }
 
 /** Play the land whose colour the hand needs most and the battlefield has least of. */

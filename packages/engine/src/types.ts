@@ -55,6 +55,8 @@ export interface CardDef {
   toughness?: number;
   keywords?: Keyword[];
   effects?: Effect[];
+  /** Optional card image for UIs (e.g. from an importer). The engine never reads it. */
+  imageUrl?: string;
 }
 
 export type CardDefs = Record<DefId, CardDef>;

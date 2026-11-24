@@ -1,4 +1,6 @@
-import type { CSSProperties } from "react";
+"use client";
+
+import { useState, type CSSProperties } from "react";
 import { cardText } from "@cwb/cards";
 import type { CardDef, CardInstance, ManaCost } from "@cwb/engine";
 
@@ -38,10 +40,15 @@ export interface CardViewProps {
 }
 
 export function CardView({ def, inst, mini, selected, active, targetable, badge, onClick }: CardViewProps) {
+  // Imported cards carry an image URL; fall back to the text layout if it can't load.
+  const [artFailed, setArtFailed] = useState(false);
+  const showArt = !mini && !!def.imageUrl && !artFailed;
+
   const isCreature = def.types.includes("creature");
   const classes = [
     "card",
     mini ? "mini" : "",
+    showArt ? "has-art" : "",
     inst?.tapped ? "tapped" : "",
     selected ? "selected" : "",
     active ? "active" : "",
@@ -61,17 +68,34 @@ export function CardView({ def, inst, mini, selected, active, targetable, badge,
       onClick={onClick}
       disabled={!onClick}
       aria-label={def.name}
+      title={showArt ? `${def.name}: ${cardText(def)}` : undefined}
     >
-      <span className="card-head">
-        <span className="card-name">{def.name}</span>
-        {!mini && <span className="card-cost">{costString(def.cost)}</span>}
-      </span>
-      {!mini && <span className="card-type">{def.types.join(" ")}</span>}
-      {!mini && <span className="card-text">{cardText(def)}</span>}
-      {isCreature && (
-        <span className={`card-pt ${damage > 0 ? "hurt" : ""}`}>
-          {def.power}/{damage > 0 ? toughnessLeft : def.toughness}
-        </span>
+      {showArt ? (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            className="card-art"
+            src={def.imageUrl}
+            alt={def.name}
+            loading="lazy"
+            onError={() => setArtFailed(true)}
+          />
+          {isCreature && damage > 0 && <span className="card-pt hurt overlay">{toughnessLeft} left</span>}
+        </>
+      ) : (
+        <>
+          <span className="card-head">
+            <span className="card-name">{def.name}</span>
+            {!mini && <span className="card-cost">{costString(def.cost)}</span>}
+          </span>
+          {!mini && <span className="card-type">{def.types.join(" ")}</span>}
+          {!mini && <span className="card-text">{cardText(def)}</span>}
+          {isCreature && (
+            <span className={`card-pt ${damage > 0 ? "hurt" : ""}`}>
+              {def.power}/{damage > 0 ? toughnessLeft : def.toughness}
+            </span>
+          )}
+        </>
       )}
       {badge && <span className="card-badge">{badge}</span>}
     </button>

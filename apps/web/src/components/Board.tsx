@@ -13,12 +13,14 @@ import {
   type CardId,
   type GameState,
   type PlayerId,
+  type Ruleset,
   type Target,
 } from "@cwb/engine";
-import { BOT, HUMAN, rules } from "../lib/driver";
+import { BOT, HUMAN } from "../lib/driver";
 import { CardView } from "./CardView";
 
 interface BoardProps {
+  rules: Ruleset;
   state: GameState;
   seed: number;
   stopEverywhere: boolean;
@@ -29,7 +31,7 @@ interface BoardProps {
 
 const label = (id: PlayerId) => (id === HUMAN ? "You" : "Opponent");
 
-export function Board({ state, seed, stopEverywhere, onToggleStops, onAction, onNewGame }: BoardProps) {
+export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAction, onNewGame }: BoardProps) {
   const [notice, setNotice] = useState<string>("");
   const [aiming, setAiming] = useState<CardId | null>(null); // spell waiting for a target
   const [attackSel, setAttackSel] = useState<CardId[]>([]);
