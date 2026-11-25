@@ -17,7 +17,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   return new NextResponse(null, { status: 204 });
 }
 
-/** Moves a deck into a folder (or back out, with `folder: null`/`""`). Owner only. */
+/**
+ * Partial update: rename, edit the decklist text, and/or move between folders.
+ * Only fields actually present in the body are touched. Owner only.
+ */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const claims = authenticate(request);
@@ -31,8 +34,32 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (deck.userId !== claims.userId) {
     return NextResponse.json({ error: "You can only edit your own decks" }, { status: 403 });
   }
-  const body = (await request.json()) as { folder?: unknown };
-  const folder = typeof body.folder === "string" ? body.folder.trim() : "";
-  const updated = await prisma.savedDeck.update({ where: { id }, data: { folder: folder || null } });
+
+  const body = (await request.json()) as {
+    name?: unknown;
+    text?: unknown;
+    folder?: unknown;
+    public?: unknown;
+  };
+  const data: { name?: string; text?: string; folder?: string | null; public?: boolean } = {};
+
+  if (typeof body.name === "string") {
+    const name = body.name.trim();
+    if (!name) return NextResponse.json({ error: "Name can't be empty" }, { status: 400 });
+    data.name = name;
+  }
+  if (typeof body.text === "string") {
+    const text = body.text.trim();
+    if (!text) return NextResponse.json({ error: "Decklist can't be empty" }, { status: 400 });
+    data.text = text;
+  }
+  if (typeof body.folder === "string") {
+    data.folder = body.folder.trim() || null;
+  }
+  if (typeof body.public === "boolean") {
+    data.public = body.public;
+  }
+
+  const updated = await prisma.savedDeck.update({ where: { id }, data });
   return NextResponse.json(updated);
 }
