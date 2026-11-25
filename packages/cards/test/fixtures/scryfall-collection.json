@@ -28,7 +28,7 @@
    "name": "Forest",
    "layout": "normal",
    "mana_cost": "",
-   "type_line": "Basic Land — Forest",
+   "type_line": "Basic Land \u2014 Forest",
    "oracle_text": "({T}: Add {G}.)",
    "keywords": [],
    "produced_mana": [
@@ -46,7 +46,7 @@
    "name": "Mountain",
    "layout": "normal",
    "mana_cost": "",
-   "type_line": "Basic Land — Mountain",
+   "type_line": "Basic Land \u2014 Mountain",
    "oracle_text": "({T}: Add {R}.)",
    "keywords": [],
    "produced_mana": [
@@ -64,7 +64,7 @@
    "name": "Island",
    "layout": "normal",
    "mana_cost": "",
-   "type_line": "Basic Land — Island",
+   "type_line": "Basic Land \u2014 Island",
    "oracle_text": "({T}: Add {U}.)",
    "keywords": [],
    "produced_mana": [
@@ -82,7 +82,7 @@
    "name": "Plains",
    "layout": "normal",
    "mana_cost": "",
-   "type_line": "Basic Land — Plains",
+   "type_line": "Basic Land \u2014 Plains",
    "oracle_text": "({T}: Add {W}.)",
    "keywords": [],
    "produced_mana": [
@@ -100,7 +100,7 @@
    "name": "Swamp",
    "layout": "normal",
    "mana_cost": "",
-   "type_line": "Basic Land — Swamp",
+   "type_line": "Basic Land \u2014 Swamp",
    "oracle_text": "({T}: Add {B}.)",
    "keywords": [],
    "produced_mana": [
@@ -118,7 +118,7 @@
    "name": "Grizzly Bears",
    "layout": "normal",
    "mana_cost": "{1}{G}",
-   "type_line": "Creature — Bear",
+   "type_line": "Creature \u2014 Bear",
    "oracle_text": "",
    "power": "2",
    "toughness": "2",
@@ -135,7 +135,7 @@
    "name": "Serra Angel",
    "layout": "normal",
    "mana_cost": "{3}{W}{W}",
-   "type_line": "Creature — Angel",
+   "type_line": "Creature \u2014 Angel",
    "oracle_text": "Flying\nVigilance (Attacking doesn't cause this creature to tap.)",
    "power": "4",
    "toughness": "4",
@@ -155,7 +155,7 @@
    "name": "Shivan Dragon",
    "layout": "normal",
    "mana_cost": "{4}{R}{R}",
-   "type_line": "Creature — Dragon",
+   "type_line": "Creature \u2014 Dragon",
    "oracle_text": "Flying\n{R}: This creature gets +1/+0 until end of turn.",
    "power": "5",
    "toughness": "5",
@@ -174,7 +174,7 @@
    "name": "Wind Drake",
    "layout": "normal",
    "mana_cost": "{2}{U}",
-   "type_line": "Creature — Drake",
+   "type_line": "Creature \u2014 Drake",
    "oracle_text": "Flying",
    "power": "2",
    "toughness": "2",
@@ -193,7 +193,7 @@
    "name": "Goblin Guide",
    "layout": "normal",
    "mana_cost": "{R}",
-   "type_line": "Creature — Goblin Scout",
+   "type_line": "Creature \u2014 Goblin Scout",
    "oracle_text": "Haste\nWhenever this creature attacks, defending player reveals the top card of their library. If it's a land card, that player puts it into their hand.",
    "power": "2",
    "toughness": "2",
@@ -258,7 +258,7 @@
    "layout": "normal",
    "mana_cost": "{W}",
    "type_line": "Instant",
-   "oracle_text": "Choose one —\n• Target player gains 3 life.\n• Prevent the next 3 damage that would be dealt to any target this turn.",
+   "oracle_text": "Choose one \u2014\n\u2022 Target player gains 3 life.\n\u2022 Prevent the next 3 damage that would be dealt to any target this turn.",
    "keywords": [],
    "image_uris": {
     "small": "https://cards.scryfall.io/small/front/0/f/0ff82aba-9022-4eff-a6dc-67365360d646.jpg?1783938786",
@@ -317,7 +317,7 @@
    "name": "Llanowar Elves",
    "layout": "normal",
    "mana_cost": "{G}",
-   "type_line": "Creature — Elf Druid",
+   "type_line": "Creature \u2014 Elf Druid",
    "oracle_text": "{T}: Add {G}.",
    "power": "1",
    "toughness": "1",
@@ -367,7 +367,7 @@
    "name": "Brazen Borrower // Petty Theft",
    "layout": "adventure",
    "mana_cost": "{1}{U}{U} // {1}{U}",
-   "type_line": "Creature — Faerie Rogue // Instant — Adventure",
+   "type_line": "Creature \u2014 Faerie Rogue // Instant \u2014 Adventure",
    "power": "3",
    "toughness": "1",
    "keywords": [
@@ -382,12 +382,12 @@
     {
      "name": "Brazen Borrower",
      "mana_cost": "{1}{U}{U}",
-     "type_line": "Creature — Faerie Rogue"
+     "type_line": "Creature \u2014 Faerie Rogue"
     },
     {
      "name": "Petty Theft",
      "mana_cost": "{1}{U}",
-     "type_line": "Instant — Adventure"
+     "type_line": "Instant \u2014 Adventure"
     }
    ]
   },
@@ -397,7 +397,7 @@
    "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
    "name": "Delver of Secrets // Insectile Aberration",
    "layout": "transform",
-   "type_line": "Creature — Human Wizard // Creature — Human Insect",
+   "type_line": "Creature \u2014 Human Wizard // Creature \u2014 Human Insect",
    "keywords": [
     "Flying",
     "Transform"
@@ -406,12 +406,12 @@
     {
      "name": "Delver of Secrets",
      "mana_cost": "{U}",
-     "type_line": "Creature — Human Wizard"
+     "type_line": "Creature \u2014 Human Wizard"
     },
     {
      "name": "Insectile Aberration",
      "mana_cost": "",
-     "type_line": "Creature — Human Insect"
+     "type_line": "Creature \u2014 Human Insect"
     }
    ]
   },
@@ -422,7 +422,7 @@
    "name": "Tarmogoyf",
    "layout": "normal",
    "mana_cost": "{1}{G}",
-   "type_line": "Creature — Lhurgoyf",
+   "type_line": "Creature \u2014 Lhurgoyf",
    "oracle_text": "Tarmogoyf's power is equal to the number of card types among cards in all graveyards and its toughness is equal to that number plus 1.",
    "power": "*",
    "toughness": "1+*",
@@ -454,7 +454,7 @@
    "name": "Hill Giant",
    "layout": "normal",
    "mana_cost": "{3}{R}",
-   "type_line": "Creature — Giant",
+   "type_line": "Creature \u2014 Giant",
    "oracle_text": "",
    "power": "3",
    "toughness": "3",
@@ -486,7 +486,7 @@
    "name": "Boros Guildgate",
    "layout": "normal",
    "mana_cost": "",
-   "type_line": "Land — Gate",
+   "type_line": "Land \u2014 Gate",
    "oracle_text": "This land enters tapped.\n{T}: Add {R} or {W}.",
    "keywords": [],
    "produced_mana": [
@@ -523,7 +523,7 @@
    "name": "Dryad Arbor",
    "layout": "normal",
    "mana_cost": "",
-   "type_line": "Land Creature — Forest Dryad",
+   "type_line": "Land Creature \u2014 Forest Dryad",
    "oracle_text": "(This land isn't a spell, it's affected by summoning sickness, and it has \"{T}: Add {G}.\")",
    "power": "1",
    "toughness": "1",
@@ -549,6 +549,42 @@
    "image_uris": {
     "small": "https://cards.scryfall.io/small/front/1/f/1f29d9e4-3100-43cb-9723-7d5c23f89b12.jpg?1783908723",
     "normal": "https://cards.scryfall.io/normal/front/1/f/1f29d9e4-3100-43cb-9723-7d5c23f89b12.jpg?1783908723"
+   }
+  },
+  {
+   "object": "card",
+   "id": "6c37f680-770b-4d0e-8bf7-44ba3449d419",
+   "oracle_id": "d6ee6cc1-902d-4f56-afa5-6fa4813bfbbc",
+   "name": "Typhoid Rats",
+   "layout": "normal",
+   "mana_cost": "{B}",
+   "type_line": "Creature \u2014 Rat",
+   "oracle_text": "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)",
+   "power": "1",
+   "toughness": "1",
+   "keywords": [
+    "Deathtouch"
+   ],
+   "image_uris": {
+    "small": "https://cards.scryfall.io/small/front/6/c/6c37f680-770b-4d0e-8bf7-44ba3449d419.jpg?1783908707",
+    "normal": "https://cards.scryfall.io/normal/front/6/c/6c37f680-770b-4d0e-8bf7-44ba3449d419.jpg?1783908707"
+   }
+  },
+  {
+   "object": "card",
+   "id": "f87e5072-525e-4b0b-a5c3-ee5e89a81e1d",
+   "oracle_id": "2fa1bbfd-92b5-482c-b32d-4cdc286474c4",
+   "name": "Ravenous Rats",
+   "layout": "normal",
+   "mana_cost": "{1}{B}",
+   "type_line": "Creature \u2014 Rat",
+   "oracle_text": "When this creature enters, target opponent discards a card.",
+   "power": "1",
+   "toughness": "1",
+   "keywords": [],
+   "image_uris": {
+    "small": "https://cards.scryfall.io/small/front/f/8/f87e5072-525e-4b0b-a5c3-ee5e89a81e1d.jpg?1783938754",
+    "normal": "https://cards.scryfall.io/normal/front/f/8/f87e5072-525e-4b0b-a5c3-ee5e89a81e1d.jpg?1783938754"
    }
   }
  ]

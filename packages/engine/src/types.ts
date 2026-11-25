@@ -28,7 +28,8 @@ export type Effect =
   | { kind: "damage"; amount: number; target: PlayerTargetSpec | ChosenTargetSpec }
   | { kind: "draw"; amount: number; target: PlayerTargetSpec }
   | { kind: "gain_life"; amount: number; target: PlayerTargetSpec }
-  | { kind: "destroy"; target: "creature" };
+  | { kind: "destroy"; target: "creature" }
+  | { kind: "discard"; amount: number; target: PlayerTargetSpec };
 
 /** A target picked when a spell is cast. */
 export type Target = { kind: "player"; id: PlayerId } | { kind: "card"; id: CardId };
@@ -38,9 +39,9 @@ export type CardType = "land" | "creature" | "instant" | "sorcery";
 /**
  * Evergreen keywords the engine understands.
  * haste: may attack the turn it enters. flying: can only be blocked by flyers.
- * vigilance: attacking doesn't tap it.
+ * vigilance: attacking doesn't tap it. deathtouch: any damage it deals is lethal.
  */
-export type Keyword = "haste" | "flying" | "vigilance";
+export type Keyword = "haste" | "flying" | "vigilance" | "deathtouch";
 
 /** A card definition. `game` lets one engine host cards from different games. */
 export interface CardDef {
@@ -108,6 +109,8 @@ export interface CardInstance {
   tapped: boolean;
   /** Damage marked this turn; cleared in cleanup. */
   damage: number;
+  /** Marked when any damage this turn came from a deathtouch source; cleared in cleanup. */
+  deathtouch?: boolean;
   /** Turn number on which it entered the battlefield (for summoning sickness). */
   enteredTurn: number;
 }
@@ -144,8 +147,10 @@ export interface GameState {
   passes: number;
   stack: StackItem[];
   combat: CombatState | null;
-  /** Set while a player must declare attackers or blockers before anyone gets priority. */
-  pending: "attackers" | "blockers" | null;
+  /** Set while a player must declare attackers/blockers, or choose a card to discard. */
+  pending: "attackers" | "blockers" | "discard" | null;
+  /** Set while `pending` is "discard": who must discard, and how many cards. */
+  discard: { player: PlayerId; count: number } | null;
   rngState: number;
   over: boolean;
   winner: PlayerId | null;
@@ -157,7 +162,8 @@ export type Action =
   | { type: "PLAY_LAND"; player: PlayerId; cardId: CardId }
   | { type: "CAST"; player: PlayerId; cardId: CardId; targets?: Target[] }
   | { type: "DECLARE_ATTACKERS"; player: PlayerId; attackers: CardId[] }
-  | { type: "DECLARE_BLOCKERS"; player: PlayerId; blocks: BlockAssignment[] };
+  | { type: "DECLARE_BLOCKERS"; player: PlayerId; blocks: BlockAssignment[] }
+  | { type: "DISCARD"; player: PlayerId; cardIds: CardId[] };
 
 export type ApplyResult =
   | { ok: true; state: GameState }

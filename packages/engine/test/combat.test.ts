@@ -195,6 +195,18 @@ describe("blocking and damage", () => {
     ).toBe(true);
   });
 
+  it("deathtouch makes any damage lethal, even from a 1-power attacker", () => {
+    const { s, p1Ids, p2Ids } = atAttackers(["viper"], ["giant"]);
+    const [viper] = p1Ids as [CardId];
+    const [giant] = p2Ids as [CardId];
+    let g = ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [viper] });
+    g = passRound(g);
+    g = ok(g, { type: "DECLARE_BLOCKERS", player: "p2", blocks: [{ blocker: giant, attacker: viper }] });
+    g = passRound(g);
+    expect(g.players.p1?.graveyard).toContain(viper); // giant's 4 power kills the 1-toughness viper
+    expect(g.players.p2?.graveyard).toContain(giant); // 1 damage from a deathtouch source is lethal
+  });
+
   it("a creature can't block twice, and tapped creatures can't block", () => {
     const { s, p1Ids, p2Ids } = atAttackers(["bear", "bear"], ["giant"]);
     const [a1, a2] = p1Ids as [CardId, CardId];

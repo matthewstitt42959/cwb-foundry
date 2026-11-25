@@ -102,8 +102,11 @@ export function resolveCombatDamage(rules: Ruleset, state: GameState): void {
   const toughness = (id: CardId) => defOf(rules, state, id)?.toughness ?? 0;
 
   const dealt: Record<CardId, number> = {};
-  const add = (id: CardId, n: number) => {
-    if (n > 0) dealt[id] = (dealt[id] ?? 0) + n;
+  const deathtouched = new Set<CardId>();
+  const add = (id: CardId, n: number, source: CardId) => {
+    if (n <= 0) return;
+    dealt[id] = (dealt[id] ?? 0) + n;
+    if (hasKeyword(rules, state, source, "deathtouch")) deathtouched.add(id);
   };
   let toPlayer = 0;
 
@@ -114,13 +117,15 @@ export function resolveCombatDamage(rules: Ruleset, state: GameState): void {
       continue;
     }
     let remaining = power(attacker);
+    const attackerDeathtouch = hasKeyword(rules, state, attacker, "deathtouch");
     blockers.forEach((blocker, i) => {
       const isLast = i === blockers.length - 1;
-      const lethal = Math.max(0, toughness(blocker) - (state.cards[blocker]?.damage ?? 0));
+      const remainingToughness = Math.max(0, toughness(blocker) - (state.cards[blocker]?.damage ?? 0));
+      const lethal = attackerDeathtouch ? Math.min(1, remainingToughness) : remainingToughness;
       const assigned = isLast ? remaining : Math.min(remaining, lethal);
-      add(blocker, assigned);
+      add(blocker, assigned, attacker);
       remaining -= assigned;
-      add(attacker, power(blocker));
+      add(attacker, power(blocker), blocker);
     });
   }
 
@@ -131,11 +136,14 @@ export function resolveCombatDamage(rules: Ruleset, state: GameState): void {
   }
   for (const [id, n] of Object.entries(dealt)) {
     const inst = state.cards[id];
-    if (inst) inst.damage += n;
+    if (inst) {
+      inst.damage += n;
+      if (deathtouched.has(id)) inst.deathtouch = true;
+    }
   }
 }
 
-/** State-based action: creatures with damage >= toughness die. */
+/** State-based action: creatures with damage >= toughness, or any deathtouch damage, die. */
 export function destroyDeadCreatures(rules: Ruleset, state: GameState): void {
   for (const pid of state.order) {
     const p = state.players[pid];
@@ -144,7 +152,8 @@ export function destroyDeadCreatures(rules: Ruleset, state: GameState): void {
     for (const id of p.battlefield) {
       const inst = state.cards[id];
       const def = defOf(rules, state, id);
-      const dead = inst && def?.types.includes("creature") && inst.damage >= (def.toughness ?? 0);
+      const dead =
+        inst && def?.types.includes("creature") && (inst.damage >= (def.toughness ?? 0) || inst.deathtouch);
       if (dead && inst) {
         state.players[inst.owner]?.graveyard.push(id);
         state.log.push(`${def?.name ?? id} dies`);
@@ -157,5 +166,8 @@ export function destroyDeadCreatures(rules: Ruleset, state: GameState): void {
 }
 
 export function clearDamage(state: GameState): void {
-  for (const inst of Object.values(state.cards)) inst.damage = 0;
+  for (const inst of Object.values(state.cards)) {
+    inst.damage = 0;
+    inst.deathtouch = false;
+  }
 }

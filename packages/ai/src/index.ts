@@ -26,6 +26,7 @@ export function chooseAction(rules: Ruleset, state: GameState): Action {
   let choice: Action;
   if (state.pending === "attackers") choice = decideAttackers(rules, state, me);
   else if (state.pending === "blockers") choice = decideBlockers(rules, state, me);
+  else if (state.pending === "discard") choice = decideDiscard(rules, state, me);
   else choice = decideMain(rules, state, me, legal) ?? pass;
 
   if (validateAction(rules, state, choice) === null) return choice;
@@ -126,6 +127,15 @@ function decideBlockers(rules: Ruleset, state: GameState, me: PlayerId): Action 
 
   const action: Action = { type: "DECLARE_BLOCKERS", player: me, blocks };
   return validateAction(rules, state, action) === null ? action : { type: "DECLARE_BLOCKERS", player: me, blocks: [] };
+}
+
+// ---- discarding -------------------------------------------------------------
+
+/** Discard the least valuable card in hand. */
+function decideDiscard(rules: Ruleset, state: GameState, me: PlayerId): Action {
+  const hand = state.players[me]?.hand ?? [];
+  const worst = [...hand].sort((a, b) => value(rules, state, a) - value(rules, state, b))[0];
+  return { type: "DISCARD", player: me, cardIds: worst ? [worst] : [] };
 }
 
 // ---- main phase -----------------------------------------------------------

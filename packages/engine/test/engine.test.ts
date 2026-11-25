@@ -167,6 +167,52 @@ describe("winning and losing", () => {
   });
 });
 
+describe("creatures with enter-the-battlefield effects", () => {
+  it("runs the effect once it resolves, and the opponent must discard", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const g = give(s, "p1", "mountain", "battlefield");
+    const imp = give(g.state, "p1", "imp", "hand");
+    s = imp.state;
+    const handBefore = s.players.p2?.hand ?? [];
+    expect(handBefore.length).toBeGreaterThan(0);
+
+    s = ok(s, { type: "CAST", player: "p1", cardId: imp.id });
+    s = ok(s, { type: "PASS", player: "p1" });
+    s = ok(s, { type: "PASS", player: "p2" }); // resolves: imp enters, its ETB effect fires
+
+    expect(s.players.p1?.battlefield).toContain(imp.id);
+    expect(s.pending).toBe("discard");
+    expect(s.discard).toEqual({ player: "p2", count: 1 });
+    expect(s.priority).toBe("p2");
+    expect(applyAction(rules, s, { type: "PASS", player: "p2" })).toEqual({
+      ok: false,
+      error: "Discard a card first",
+    });
+
+    const choice = handBefore[0] as string;
+    s = ok(s, { type: "DISCARD", player: "p2", cardIds: [choice] });
+    expect(s.pending).toBeNull();
+    expect(s.discard).toBeNull();
+    expect(s.players.p2?.hand).not.toContain(choice);
+    expect(s.players.p2?.graveyard).toContain(choice);
+    expect(s.priority).toBe("p1");
+  });
+
+  it("is a no-op when the discarding player's hand is already empty", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const m = give(s, "p1", "mountain", "battlefield");
+    const imp = give(m.state, "p1", "imp", "hand");
+    s = clone(imp.state);
+    (s.players.p2 as { hand: string[] }).hand = [];
+
+    s = ok(s, { type: "CAST", player: "p1", cardId: imp.id });
+    s = ok(s, { type: "PASS", player: "p1" });
+    s = ok(s, { type: "PASS", player: "p2" });
+    expect(s.players.p1?.battlefield).toContain(imp.id);
+    expect(s.pending).toBeNull(); // nothing to discard: no pending choice
+  });
+});
+
 describe("purity and legal actions", () => {
   it("never mutates the input state, even on illegal actions", () => {
     const s = newGame();

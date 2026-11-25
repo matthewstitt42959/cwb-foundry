@@ -58,6 +58,16 @@ describe("convertScryfallCard: supported cards", () => {
     expect(convert("Grizzly Bears").def).toMatchObject({ types: ["creature"], cost: { generic: 1, G: 1 }, power: 2, toughness: 2 });
     expect(convert("Serra Angel").def).toMatchObject({ power: 4, toughness: 4, keywords: ["flying", "vigilance"] });
     expect(convert("Wind Drake").def?.keywords).toEqual(["flying"]);
+    expect(convert("Typhoid Rats").def).toMatchObject({ power: 1, toughness: 1, keywords: ["deathtouch"] });
+  });
+
+  it("converts an enter-the-battlefield discard trigger", () => {
+    expect(convert("Ravenous Rats").def).toMatchObject({
+      types: ["creature"],
+      power: 1,
+      toughness: 1,
+      effects: [{ kind: "discard", amount: 1, target: "opponent" }],
+    });
   });
 
   it("converts removal, card draw and compound spells", () => {

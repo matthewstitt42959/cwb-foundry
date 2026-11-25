@@ -103,5 +103,13 @@ export function applyEffect(
       drawCards(state, who, effect.amount);
       state.log.push(`${who} draws ${effect.amount}`);
       break;
+    case "discard":
+      // The discarding player chooses the card, so this needs a pending player decision
+      // (like attackers/blockers): resolveTop must intercept "discard" before calling here.
+      throw new Error("discard effects must be resolved by resolveTop, not applyEffect");
+    default: {
+      const exhaustive: never = effect;
+      throw new Error(`Unhandled effect kind: ${(exhaustive as Effect).kind}`);
+    }
   }
 }

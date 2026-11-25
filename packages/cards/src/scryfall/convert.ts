@@ -19,6 +19,7 @@ const SUPPORTED_KEYWORDS: Record<string, Keyword> = {
   flying: "flying",
   haste: "haste",
   vigilance: "vigilance",
+  deathtouch: "deathtouch",
 };
 
 const BASIC_COLORS = ["W", "U", "B", "R", "G"] as const;
@@ -86,7 +87,15 @@ function parseClause(clause: string): Effect | null {
     const n = parseCount(m[1] ?? "");
     return n ? { kind: "draw", amount: n, target: "self" } : null;
   }
+  if ((m = clause.match(/^target opponent discards? (\w+) cards?$/))) {
+    const n = parseCount(m[1] ?? "");
+    return n ? { kind: "discard", amount: n, target: "opponent" } : null;
+  }
   return null;
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function parseSpellText(text: string, name: string): { effects: Effect[]; problems: string[] } {
@@ -96,7 +105,7 @@ function parseSpellText(text: string, name: string): { effects: Effect[]; proble
     .split("\n")
     .map(stripReminderText)
     .filter(Boolean);
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = escapeRegExp(name);
 
   for (const line of lines) {
     const normalized = line.replace(new RegExp(escaped, "gi"), "~").replace(/\bthis spell\b/gi, "~");
@@ -192,12 +201,22 @@ export function convertScryfallCard(card: ScryfallCard): ConvertResult {
       base.toughness = toughness;
     }
     const keywords: Keyword[] = [];
+    const etbEffects: Effect[] = [];
+    const escapedName = escapeRegExp(card.name);
     for (const line of text.split("\n").map(stripReminderText).filter(Boolean)) {
+      const normalized = line.replace(new RegExp(escapedName, "gi"), "~").replace(/\bthis creature\b/gi, "~");
+      const etb = normalized.match(/^when ~ enters(?: the battlefield)?,\s*(.+?)\.?$/i);
+      const etbEffect = etb ? parseClause((etb[1] ?? "").trim().toLowerCase()) : null;
+      if (etbEffect) {
+        etbEffects.push(etbEffect);
+        continue;
+      }
       const kws = parseKeywordLine(line);
       if (kws) keywords.push(...kws);
       else reasons.push(`Ability "${line}" isn't supported yet`);
     }
     if (keywords.length) base.keywords = [...new Set(keywords)];
+    if (etbEffects.length) base.effects = etbEffects;
   } else {
     const { effects, problems: textProblems } = parseSpellText(text, card.name);
     reasons.push(...textProblems);

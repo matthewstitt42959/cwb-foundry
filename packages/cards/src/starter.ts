@@ -181,6 +181,15 @@ export function cardText(def: CardDef): string {
       case "destroy":
         parts.push("Destroy target creature.");
         break;
+      case "discard":
+        parts.push(
+          `${cap(who(e.target))} discard${e.target === "self" ? "" : "s"} ${e.amount} card${e.amount === 1 ? "" : "s"}.`,
+        );
+        break;
+      default: {
+        const exhaustive: never = e;
+        throw new Error(`Unhandled effect kind: ${(exhaustive as { kind: string }).kind}`);
+      }
     }
   }
   return parts.join(" ");

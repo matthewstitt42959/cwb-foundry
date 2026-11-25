@@ -10,7 +10,7 @@ import {
   validateAttackers,
   validateBlocks,
 } from "./combat";
-import { applyEffect, checkState, drawCards } from "./effects";
+import { applyEffect, checkState, drawCards, opponentOf } from "./effects";
 import { isLegalTarget, legalTargets, targetSpecOf } from "./targeting";
 import { planPayment } from "./mana";
 import { shuffle } from "./rng";
@@ -18,6 +18,7 @@ import type {
   Action,
   ApplyResult,
   CardId,
+  Effect,
   GameState,
   PlayerId,
   PlayerState,
@@ -75,6 +76,7 @@ export function createGame(rules: Ruleset, setup: GameSetup): GameState {
     stack: [],
     combat: null,
     pending: null,
+    discard: null,
     rngState,
     over: false,
     winner: null,
@@ -146,7 +148,7 @@ function enterPhase(rules: Ruleset, state: GameState): void {
     checkState(state);
     if (state.over) return;
 
-    state.priority = declarer(state) ?? state.activePlayer;
+    state.priority = pendingActor(state) ?? state.activePlayer;
     state.passes = 0;
     if (gives) return;
     advancePhase(rules, state, false);
@@ -166,6 +168,19 @@ function advancePhase(rules: Ruleset, state: GameState, enter = true): void {
   if (enter) enterPhase(rules, state);
 }
 
+/**
+ * Begins a discard: who must discard, and how many. Returns false (a no-op, matching
+ * real MTG) if that player's hand is already empty, so there's nothing to resolve.
+ */
+function beginDiscard(state: GameState, effect: Extract<Effect, { kind: "discard" }>, controller: PlayerId): boolean {
+  const who = effect.target === "self" ? controller : opponentOf(state, controller);
+  const hand = state.players[who]?.hand ?? [];
+  if (hand.length === 0) return false;
+  state.pending = "discard";
+  state.discard = { player: who, count: Math.min(effect.amount, hand.length) };
+  return true;
+}
+
 function resolveTop(rules: Ruleset, state: GameState): void {
   const item = state.stack.pop();
   if (!item) return;
@@ -178,6 +193,13 @@ function resolveTop(rules: Ruleset, state: GameState): void {
     owner.battlefield.push(inst.id);
     inst.enteredTurn = state.turn;
     state.log.push(`${def.name} enters the battlefield`);
+    for (const effect of def.effects ?? []) {
+      if (effect.kind === "discard") {
+        if (beginDiscard(state, effect, item.controller)) return; // a discard is now pending
+        continue; // nothing in hand to discard: no-op, like real MTG
+      }
+      applyEffect(rules, state, effect, item.controller, item.targets);
+    }
   } else {
     const spec = targetSpecOf(def);
     const target = item.targets[0];
@@ -193,24 +215,50 @@ function resolveTop(rules: Ruleset, state: GameState): void {
   checkState(state);
 }
 
+/** Who must act while a declaration or discard is pending (null if nothing is). */
+function pendingActor(state: GameState): PlayerId | null {
+  if (state.pending === "discard") return state.discard?.player ?? null;
+  return declarer(state);
+}
+
+/** Validates a DISCARD action against the pending discard, or an error message. */
+function validateDiscard(state: GameState, cardIds: CardId[]): string | null {
+  const d = state.discard;
+  if (!d) return "Not discarding now";
+  if (cardIds.length !== d.count) return `Choose ${d.count} card${d.count === 1 ? "" : "s"} to discard`;
+  const hand = state.players[d.player]?.hand ?? [];
+  const seen = new Set<CardId>();
+  for (const id of cardIds) {
+    if (seen.has(id)) return "Can't discard the same card twice";
+    seen.add(id);
+    if (!hand.includes(id)) return "Card is not in your hand";
+  }
+  return null;
+}
+
 // ---- legality -------------------------------------------------------------
 
 /** Returns an error message if `action` is illegal, or null if it is legal. */
 export function validateAction(rules: Ruleset, state: GameState, action: Action): string | null {
   if (state.over) return "The game is over";
 
-  // While a declaration is pending, only that declaration is legal.
+  // While a declaration or discard is pending, only that action is legal.
   if (state.pending) {
-    if (action.player !== declarer(state)) return "Waiting for the other player to declare";
+    if (action.player !== pendingActor(state)) return "Waiting for the other player to declare";
     if (action.type === "DECLARE_ATTACKERS" && state.pending === "attackers") {
       return validateAttackers(rules, state, action.attackers);
     }
     if (action.type === "DECLARE_BLOCKERS" && state.pending === "blockers") {
       return validateBlocks(rules, state, action.blocks);
     }
-    return state.pending === "attackers" ? "Declare attackers first" : "Declare blockers first";
+    if (action.type === "DISCARD" && state.pending === "discard") {
+      return validateDiscard(state, action.cardIds);
+    }
+    if (state.pending === "attackers") return "Declare attackers first";
+    if (state.pending === "blockers") return "Declare blockers first";
+    return "Discard a card first";
   }
-  if (action.type === "DECLARE_ATTACKERS" || action.type === "DECLARE_BLOCKERS") {
+  if (action.type === "DECLARE_ATTACKERS" || action.type === "DECLARE_BLOCKERS" || action.type === "DISCARD") {
     return "Not declaring now";
   }
 
@@ -280,6 +328,12 @@ export function getLegalActions(rules: Ruleset, state: GameState): Action[] {
       }
     }
     return options;
+  }
+  if (state.pending === "discard" && state.discard) {
+    const { player: who, count } = state.discard;
+    const hand = state.players[who]?.hand ?? [];
+    if (count >= hand.length) return [{ type: "DISCARD", player: who, cardIds: [...hand] }];
+    return hand.map((cardId): Action => ({ type: "DISCARD", player: who, cardIds: [cardId] }));
   }
 
   const candidates: Action[] = [{ type: "PASS", player }];
@@ -364,13 +418,31 @@ export function applyAction(rules: Ruleset, state: GameState, action: Action): A
         if (next.stack.length > 0) {
           resolveTop(rules, next);
           next.passes = 0;
-          next.priority = next.activePlayer;
+          next.priority = pendingActor(next) ?? next.activePlayer;
         } else {
           advancePhase(rules, next);
         }
       } else {
         next.priority = nextPlayer(next, action.player);
       }
+      break;
+    }
+    case "DISCARD": {
+      const d = next.discard;
+      next.pending = null;
+      next.discard = null;
+      next.passes = 0;
+      if (d) {
+        const discarder = next.players[d.player];
+        for (const id of action.cardIds) {
+          if (discarder) discarder.hand = discarder.hand.filter((c) => c !== id);
+          discarder?.graveyard.push(id);
+        }
+        next.log.push(`${d.player} discards ${action.cardIds.length === 1 ? "a card" : `${action.cardIds.length} cards`}`);
+      }
+      destroyDeadCreatures(rules, next);
+      checkState(next);
+      next.priority = next.activePlayer;
       break;
     }
   }
