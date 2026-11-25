@@ -1,0 +1,23 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// This Supabase project is shared with other apps (see pbandj). Everything here lives
+// in its own "cwb_foundry" Postgres schema, selected via the ?schema= query param on
+// DATABASE_URL/DIRECT_URL, so these tables can never collide with another app's.
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// Decklists saved from the menu's Import panel (replaces the hardcoded
+/// SAVED_DECKLISTS array in GameApp.tsx). Plain decklist text only — the cards
+/// themselves still come from Scryfall at import time, never stored here.
+model SavedDeck {
+  id        String   @id @default(cuid())
+  name      String
+  text      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

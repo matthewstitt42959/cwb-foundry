@@ -1,0 +1,244 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0e0e12;
+  --panel: #17171d;
+  --panel-2: #1f1f27;
+  --line: #2c2c37;
+  --text: #e8e6df;
+  --dim: #8d8b85;
+  --accent: #9a9a9a;
+  --good: #7bd88f;
+  --warn: #ffb454;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.4;
+}
+
+/*
+ * Tailwind's preflight zeroes default margin/padding on every element and collapses
+ * heading sizes to `inherit`. Restore sane defaults here for anything that doesn't get
+ * explicit spacing/typography utilities, so elements not yet migrated to Tailwind
+ * (across the whole app, not just the menu) don't lose their spacing.
+ */
+p,
+ul,
+ol,
+dl,
+dd {
+  margin: 0 0 0.6em;
+}
+ul,
+ol {
+  padding-left: 1.4em;
+}
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  line-height: 1.25;
+}
+h1 {
+  font-size: 1.75rem;
+  margin-bottom: 0.4em;
+}
+h2 {
+  font-size: 1.25rem;
+  margin-bottom: 0.3em;
+}
+summary {
+  cursor: pointer;
+}
+
+.dim {
+  color: var(--dim);
+}
+
+.btn {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+.btn:hover {
+  border-color: #50505f;
+}
+.btn.primary {
+  background: #2d5cff;
+  border-color: #2d5cff;
+  color: #fff;
+}
+.btn.primary:hover {
+  background: #4a73ff;
+}
+.btn.big {
+  padding: 12px 28px;
+  font-size: 1.05rem;
+}
+
+/* ---- menu ----
+ * The menu screen's layout is styled with Tailwind utility classes directly in
+ * GameApp.tsx. `.error` and `.warn` stay here: Board.tsx's `.notice` shares the same
+ * warning colour, kept as its own rule (see below) rather than duplicated.
+ */
+.error {
+  color: #ff7a7a;
+}
+.warn {
+  color: var(--warn);
+  font-size: 0.88rem;
+}
+
+/*
+ * ---- game ----
+ * The board's own layout is styled with Tailwind utility classes directly in
+ * Board.tsx. `.targetable`/`.active` stay defined in the cards section below (shared
+ * compound selectors with `.card`), and `.btn`/`.dim` stay here (shared with the
+ * menu) — everything else that was board-only moved to Tailwind.
+ */
+
+/* ---- cards ---- */
+.card {
+  --accent: #9a9a9a;
+  --zoom: 1;
+  --ty: 0px;
+  --rot: 0deg;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 128px;
+  min-height: 150px;
+  padding: 8px;
+  background: var(--panel);
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  position: relative;
+  transform: translateY(var(--ty)) rotate(var(--rot)) scale(var(--zoom));
+  transform-origin: left bottom;
+  transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s;
+}
+.card:hover,
+.card:focus-visible {
+  --zoom: 1.8;
+  z-index: 50;
+}
+.card.mini:hover,
+.card.mini:focus-visible {
+  --zoom: 2.4;
+}
+.card:disabled {
+  cursor: default;
+  color: var(--text);
+}
+.card.mini {
+  width: 92px;
+  min-height: 0;
+  padding: 5px 7px;
+  font-size: 0.75rem;
+}
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.card.mini .card-head {
+  font-size: 0.72rem;
+}
+.card-cost {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+}
+.card-type {
+  font-size: 0.7rem;
+  color: var(--dim);
+  text-transform: capitalize;
+}
+.card-text {
+  font-size: 0.75rem;
+  flex: 1;
+}
+.card-pt {
+  align-self: flex-end;
+  font-weight: 700;
+  background: var(--panel-2);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 1px 8px;
+}
+.card-pt.hurt {
+  color: #ff7a7a;
+}
+.card-badge {
+  position: absolute;
+  bottom: -9px;
+  left: 6px;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.65rem;
+  background: var(--warn);
+  color: #000;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-weight: 600;
+}
+.card.has-art {
+  padding: 0;
+  min-height: 0;
+  background: #000;
+  overflow: visible;
+}
+.card-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.card-pt.overlay {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.85);
+}
+.card.tapped {
+  opacity: 0.55;
+  --rot: 8deg;
+}
+.card.active {
+  cursor: pointer;
+  box-shadow: 0 0 0 2px var(--good);
+}
+.card.active:hover {
+  --ty: -3px;
+}
+.card.targetable,
+.player-bar.targetable {
+  box-shadow: 0 0 0 3px #ff4d6d;
+  cursor: crosshair;
+}
+.card.selected {
+  box-shadow: 0 0 0 3px #2d5cff;
+  --ty: -4px;
+}
+
+/* .overlay/.dialog (the win/lose modal) and the <=900px responsive layout are now
+ * Tailwind utility classes directly in Board.tsx. */
