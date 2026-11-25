@@ -21,20 +21,37 @@ export interface ManaCost {
  * Targeting is not modelled yet: "opponent" / "self" are fixed targets.
  */
 export type PlayerTargetSpec = "opponent" | "self";
-/** "any" = a player or a creature, chosen on cast; "creature" = a creature, chosen on cast. */
-export type ChosenTargetSpec = "any" | "creature";
+/**
+ * "any" = a player or a creature, chosen on cast; "creature" = a creature, chosen on
+ * cast; "blocking_creature" = a creature currently declared as a blocker in the
+ * active combat (any attacker's), chosen on cast/activation.
+ */
+export type ChosenTargetSpec = "any" | "creature" | "blocking_creature";
 
 export type Effect =
   | { kind: "damage"; amount: number; target: PlayerTargetSpec | ChosenTargetSpec }
   | { kind: "draw"; amount: number; target: PlayerTargetSpec }
   | { kind: "gain_life"; amount: number; target: PlayerTargetSpec }
   | { kind: "destroy"; target: "creature" }
-  | { kind: "discard"; amount: number; target: PlayerTargetSpec };
+  | { kind: "discard"; amount: number; target: PlayerTargetSpec }
+  | { kind: "pump"; power: number; toughness: number; target: ChosenTargetSpec; duration: "until_end_of_turn" };
 
 /** A target picked when a spell is cast. */
 export type Target = { kind: "player"; id: PlayerId } | { kind: "card"; id: CardId };
 
 export type CardType = "land" | "creature" | "instant" | "sorcery";
+
+/**
+ * What an activated ability costs. A single kind today ("tap" the source); more
+ * (sacrifice, discard, mana) slot in here later without touching anything that
+ * already works. `Ability.cost` is an array since real costs can combine several.
+ */
+export type Cost = { kind: "tap" };
+
+export interface Ability {
+  cost: Cost[];
+  effect: Effect;
+}
 
 /**
  * Evergreen keywords the engine understands.
@@ -56,6 +73,7 @@ export interface CardDef {
   toughness?: number;
   keywords?: Keyword[];
   effects?: Effect[];
+  abilities?: Ability[];
   /** Optional card image for UIs (e.g. from an importer). The engine never reads it. */
   imageUrl?: string;
 }
@@ -111,6 +129,9 @@ export interface CardInstance {
   damage: number;
   /** Marked when any damage this turn came from a deathtouch source; cleared in cleanup. */
   deathtouch?: boolean;
+  /** Temporary stat deltas from effects like "pump" (e.g. -1/-1); cleared in cleanup. */
+  tempPower?: number;
+  tempToughness?: number;
   /** Turn number on which it entered the battlefield (for summoning sickness). */
   enteredTurn: number;
 }
@@ -126,12 +147,14 @@ export interface CombatState {
   blocks: BlockAssignment[];
 }
 
-export interface StackItem {
-  cardId: CardId;
-  controller: PlayerId;
-  /** Chosen targets (at most one for now). Empty for untargeted spells. */
-  targets: Target[];
-}
+/**
+ * Something waiting to resolve. A "spell" is a cast card (as before); an "ability"
+ * is an activated ability's single effect, identified by its source permanent
+ * rather than a card being cast. Both resolve the same way once popped.
+ */
+export type StackItem =
+  | { kind: "spell"; cardId: CardId; controller: PlayerId; targets: Target[] }
+  | { kind: "ability"; sourceId: CardId; controller: PlayerId; effect: Effect; targets: Target[] };
 
 export interface GameState {
   packId: string;
@@ -163,7 +186,8 @@ export type Action =
   | { type: "CAST"; player: PlayerId; cardId: CardId; targets?: Target[] }
   | { type: "DECLARE_ATTACKERS"; player: PlayerId; attackers: CardId[] }
   | { type: "DECLARE_BLOCKERS"; player: PlayerId; blocks: BlockAssignment[] }
-  | { type: "DISCARD"; player: PlayerId; cardIds: CardId[] };
+  | { type: "DISCARD"; player: PlayerId; cardIds: CardId[] }
+  | { type: "ACTIVATE"; player: PlayerId; cardId: CardId; abilityIndex: number; targets?: Target[] };
 
 export type ApplyResult =
   | { ok: true; state: GameState }

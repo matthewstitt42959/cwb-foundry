@@ -87,6 +87,19 @@ export function applyEffect(
     return;
   }
 
+  if (effect.kind === "pump") {
+    const t = targets[0];
+    if (t?.kind === "card") {
+      const inst = state.cards[t.id];
+      if (inst) {
+        inst.tempPower = (inst.tempPower ?? 0) + effect.power;
+        inst.tempToughness = (inst.tempToughness ?? 0) + effect.toughness;
+      }
+      state.log.push(`${name(t.id)} gets ${effect.power >= 0 ? "+" : ""}${effect.power}/${effect.toughness >= 0 ? "+" : ""}${effect.toughness} until end of turn`);
+    }
+    return;
+  }
+
   const who = effect.target === "self" ? controller : opponentOf(state, controller);
   const p = state.players[who];
   if (!p) return;

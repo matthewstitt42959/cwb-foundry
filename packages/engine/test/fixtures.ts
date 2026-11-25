@@ -71,6 +71,29 @@ export const defs: CardDefs = {
     toughness: 1,
     effects: [{ kind: "discard", amount: 1, target: "opponent" }],
   },
+  healer: {
+    id: "healer",
+    game: "test",
+    name: "Test Healer",
+    types: ["creature"],
+    power: 1,
+    toughness: 1,
+    abilities: [{ cost: [{ kind: "tap" }], effect: { kind: "gain_life", amount: 1, target: "self" } }],
+  },
+  weakener: {
+    id: "weakener",
+    game: "test",
+    name: "Test Weakener",
+    types: ["creature"],
+    power: 1,
+    toughness: 1,
+    abilities: [
+      {
+        cost: [{ kind: "tap" }],
+        effect: { kind: "pump", power: -1, toughness: -1, target: "blocking_creature", duration: "until_end_of_turn" },
+      },
+    ],
+  },
   bolt: {
     id: "bolt",
     game: "test",

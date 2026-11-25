@@ -586,6 +586,23 @@
     "small": "https://cards.scryfall.io/small/front/f/8/f87e5072-525e-4b0b-a5c3-ee5e89a81e1d.jpg?1783938754",
     "normal": "https://cards.scryfall.io/normal/front/f/8/f87e5072-525e-4b0b-a5c3-ee5e89a81e1d.jpg?1783938754"
    }
+  },
+  {
+   "object": "card",
+   "id": "ed8c028e-6656-47ef-97fb-de99f8833d5f",
+   "oracle_id": "0f2504b0-bd5a-4b61-b8bb-c8b20aa1e26e",
+   "name": "Rabid Rats",
+   "layout": "normal",
+   "mana_cost": "{1}{B}",
+   "type_line": "Creature \u2014 Rat",
+   "oracle_text": "{T}: Target blocking creature gets -1/-1 until end of turn.",
+   "power": "1",
+   "toughness": "1",
+   "keywords": [],
+   "image_uris": {
+    "small": "https://cards.scryfall.io/small/front/e/d/ed8c028e-6656-47ef-97fb-de99f8833d5f.jpg?1783946560",
+    "normal": "https://cards.scryfall.io/normal/front/e/d/ed8c028e-6656-47ef-97fb-de99f8833d5f.jpg?1783946560"
+   }
   }
  ]
 }

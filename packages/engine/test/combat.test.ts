@@ -207,6 +207,30 @@ describe("blocking and damage", () => {
     expect(g.players.p2?.graveyard).toContain(giant); // 1 damage from a deathtouch source is lethal
   });
 
+  it("a creature pumped to 0 toughness dies with no damage marked at all", () => {
+    const { s, p1Ids, p2Ids } = atAttackers(["giant", "weakener"], ["hawk"]);
+    const [giant, weakener] = p1Ids as [CardId, CardId];
+    const [hawk] = p2Ids as [CardId];
+    let g = ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [giant] });
+    g = passRound(g);
+    expect(g.pending).toBe("blockers");
+    g = ok(g, { type: "DECLARE_BLOCKERS", player: "p2", blocks: [{ blocker: hawk, attacker: giant }] });
+    expect(g.priority).toBe("p1"); // before combat damage: still time to respond
+
+    g = ok(g, {
+      type: "ACTIVATE",
+      player: "p1",
+      cardId: weakener,
+      abilityIndex: 0,
+      targets: [{ kind: "card", id: hawk }],
+    });
+    g = passRound(g); // resolves the -1/-1
+
+    expect(g.cards[hawk]?.damage).toBe(0); // died before combat damage ever happened, none marked
+    expect(g.players.p2?.graveyard).toContain(hawk);
+    expect(g.players.p2?.battlefield).not.toContain(hawk);
+  });
+
   it("a creature can't block twice, and tapped creatures can't block", () => {
     const { s, p1Ids, p2Ids } = atAttackers(["bear", "bear"], ["giant"]);
     const [a1, a2] = p1Ids as [CardId, CardId];

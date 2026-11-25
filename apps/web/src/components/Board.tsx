@@ -224,10 +224,11 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
   const stackText = (i: number) => {
     const item = state.stack[i];
     if (!item) return "";
-    const def = defOf(item.cardId);
+    const def = item.kind === "spell" ? defOf(item.cardId) : defOf(item.sourceId);
+    const name = item.kind === "spell" ? (def?.name ?? "?") : `${def?.name ?? "?"} ability`;
     const t = item.targets[0];
     const tn = t ? (t.kind === "player" ? label(t.id) : (defOf(t.id)?.name ?? "?")) : "";
-    return `${def?.name ?? "?"} (${label(item.controller)})${tn ? ` → ${tn}` : ""}`;
+    return `${name} (${label(item.controller)})${tn ? ` → ${tn}` : ""}`;
   };
 
   const winnerText =
