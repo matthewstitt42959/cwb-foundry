@@ -22,21 +22,21 @@ interface Session {
 }
 
 const IMPORTED = "imported";
-const CACHE_KEY = "cwb:scryfall-cache:v1";
+/**
+ * Cached entries are `convertScryfallCard` *results*, not raw Scryfall data. Bump this
+ * version whenever the importer's support changes (new keywords, effects, etc.),
+ * otherwise cards already cached as "unsupported" stay that way forever, even after
+ * the engine learns to run them.
+ */
+const CACHE_KEY = "cwb:scryfall-cache:v2";
 const MIN_IMPORT_CARDS = 10;
 
-const EXAMPLE_LIST = `4 Lightning Bolt
-3 Shock
-2 Lava Axe
-3 Lightning Helix
-6 Grizzly Bears
-3 Hill Giant
-2 Serra Angel
-6 Mountain
-6 Forest
-5 Plains
-2 Doom Blade
-2 Llanowar Elves`;
+/** A decklist saved via the `/api/decks` route (backed by the SavedDeck table). */
+interface SavedDecklist {
+  id: string;
+  name: string;
+  text: string;
+}
 
 function loadCache(): ImportCache {
   const cache: ImportCache = new Map();
@@ -76,9 +76,55 @@ export function GameApp() {
   const [imported, setImported] = useState<ImportedDeck | null>(null);
   const cache = useRef<ImportCache>(new Map());
 
+  const [savedDecks, setSavedDecks] = useState<SavedDecklist[]>([]);
+  const [saveName, setSaveName] = useState("");
+  const [savingDeck, setSavingDeck] = useState(false);
+  const [savedDecksError, setSavedDecksError] = useState("");
+
   useEffect(() => {
     cache.current = loadCache();
   }, []);
+
+  useEffect(() => {
+    fetch("/api/decks")
+      .then((r) => (r.ok ? (r.json() as Promise<SavedDecklist[]>) : Promise.reject(new Error("Failed to load"))))
+      .then(setSavedDecks)
+      .catch(() => setSavedDecksError("Couldn't load saved decks"));
+  }, []);
+
+  const saveCurrentDeck = async () => {
+    const name = saveName.trim();
+    if (!name || !importText.trim()) return;
+    setSavingDeck(true);
+    setSavedDecksError("");
+    try {
+      const res = await fetch("/api/decks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, text: importText }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      const deck = (await res.json()) as SavedDecklist;
+      setSavedDecks((cur) => [...cur, deck]);
+      setSaveName("");
+    } catch {
+      setSavedDecksError("Couldn't save this deck");
+    } finally {
+      setSavingDeck(false);
+    }
+  };
+
+  const deleteSavedDeck = async (id: string) => {
+    const removed = savedDecks.find((d) => d.id === id);
+    setSavedDecks((cur) => cur.filter((d) => d.id !== id)); // optimistic
+    try {
+      const res = await fetch(`/api/decks/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed");
+    } catch {
+      setSavedDecksError("Couldn't delete that deck");
+      if (removed) setSavedDecks((cur) => [...cur, removed]); // restore on failure
+    }
+  };
 
   const importedUsable = !!imported && imported.playableCount >= MIN_IMPORT_CARDS;
   const defsFor = (): CardDefs => imported?.defs ?? {};
@@ -154,19 +200,22 @@ export function GameApp() {
   const hasLands = !!imported?.cards.some((id) => imported.defs[id]?.types.includes("land"));
 
   return (
-    <main className="menu">
-      <p className="eyebrow">Cards With Borders Foundry</p>
+    <main className="mx-auto max-w-[760px] px-6 py-12">
+      <p className="text-xs uppercase tracking-[0.3em] text-[var(--dim)]">Cards With Borders Foundry</p>
       <h1>Play against the AI</h1>
       <p className="dim">Pick a deck for each side, or import a real decklist below. Every game uses a fresh random seed.</p>
 
-      <div className="decks">
+      <div className="my-6 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
         {starterDecks.map((d) => (
-          <section key={d.id} className="deck">
+          <section
+            key={d.id}
+            className="rounded-[10px] border border-[var(--line)] bg-[var(--panel)] px-[18px] pt-1 pb-[14px]"
+          >
             <h2>{d.name}</h2>
             <p>{d.blurb}</p>
             <details>
               <summary>Decklist</summary>
-              <ul>
+              <ul className="text-[0.9rem]">
                 {countBy(d.cards).map(([id, n]) => (
                   <li key={id}>
                     {n}× {starterDefs[id]?.name ?? id}
@@ -178,7 +227,10 @@ export function GameApp() {
         ))}
       </div>
 
-      <section className="import" aria-label="Import a deck from Scryfall">
+      <section
+        className="mt-2 mb-6 rounded-[10px] border border-[var(--line)] bg-[var(--panel)] px-[18px] pt-1 pb-[18px]"
+        aria-label="Import a deck from Scryfall"
+      >
         <h2>Import a deck from Scryfall</h2>
         <p className="dim">
           Paste a decklist (<code>4 Lightning Bolt</code>, Arena and MTGO exports work). Cards are looked up on Scryfall
@@ -186,6 +238,7 @@ export function GameApp() {
           quietly changed.
         </p>
         <textarea
+          className="w-full resize-y rounded-md border border-[var(--line)] bg-[var(--panel-2)] p-[10px] font-mono text-[0.9rem] text-[var(--text)]"
           value={importText}
           onChange={(e) => setImportText(e.target.value)}
           rows={10}
@@ -193,18 +246,51 @@ export function GameApp() {
           placeholder={"4 Lightning Bolt\n20 Mountain\n..."}
           aria-label="Decklist"
         />
-        <div className="import-actions">
+        <div className="my-[10px] flex flex-wrap gap-[10px]">
           <button type="button" className="btn primary" onClick={runImport} disabled={importing || !importText.trim()}>
             {importing ? `Importing… ${progress}` : "Import"}
           </button>
-          <button type="button" className="btn" onClick={() => setImportText(EXAMPLE_LIST)} disabled={importing}>
-            Load an example
+          <input
+            className="rounded-md border border-[var(--line)] bg-[var(--panel-2)] px-[10px] py-2 text-[var(--text)]"
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            placeholder="Name this list to save it"
+            aria-label="Name for saving this decklist"
+          />
+          <button
+            type="button"
+            className="btn"
+            onClick={saveCurrentDeck}
+            disabled={savingDeck || !saveName.trim() || !importText.trim()}
+          >
+            {savingDeck ? "Saving…" : "Save"}
           </button>
         </div>
+        {savedDecks.length > 0 && (
+          <div className="mb-[10px] flex flex-wrap gap-[10px]">
+            {savedDecks.map((d) => (
+              <span key={d.id} className="flex items-center gap-1">
+                <button type="button" className="btn" onClick={() => setImportText(d.text)} disabled={importing}>
+                  Load &quot;{d.name}&quot;
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => deleteSavedDeck(d.id)}
+                  aria-label={`Delete saved deck "${d.name}"`}
+                  title="Delete"
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {savedDecksError && <p className="error">{savedDecksError}</p>}
         {importError && <p className="error">{importError}</p>}
 
         {imported && (
-          <div className="report" aria-live="polite">
+          <div aria-live="polite">
             <p>
               <strong>
                 {imported.playableCount} playable
@@ -218,13 +304,17 @@ export function GameApp() {
               <p className="warn">Fewer than 40 playable cards: you may run out of library sooner.</p>
             )}
             {importedUsable && !hasLands && <p className="warn">No lands in the playable cards: you won&apos;t be able to cast anything.</p>}
-            <ul className="rows">
+            <ul className="mt-2 list-none pl-0 text-[0.88rem]">
               {imported.rows.map((r) => (
-                <li key={r.name} className={r.status}>
-                  <span className="mark">{r.status === "ok" ? "✓" : "✕"}</span>
+                <li key={r.name} className="flex gap-2 border-b border-[#1d1d25] py-[3px]">
+                  <span
+                    className={`w-[1.2em] text-center ${r.status === "ok" ? "text-[var(--good)]" : "text-[#ff7a7a]"}`}
+                  >
+                    {r.status === "ok" ? "✓" : "✕"}
+                  </span>
                   <span>
                     {r.count}× {r.name}
-                    {r.reasons.length > 0 && <span className="reason"> — {r.reasons.join("; ")}</span>}
+                    {r.reasons.length > 0 && <span className="dim"> — {r.reasons.join("; ")}</span>}
                   </span>
                 </li>
               ))}
@@ -236,16 +326,24 @@ export function GameApp() {
         )}
       </section>
 
-      <div className="pickers">
-        <label>
+      <div className="mb-6 flex flex-wrap gap-6">
+        <label className="grid gap-1.5 text-[0.85rem] text-[var(--dim)]">
           Your deck
-          <select value={yourDeck} onChange={(e) => setYourDeck(e.target.value)}>
+          <select
+            className="rounded-md border border-[var(--line)] bg-[var(--panel-2)] px-[10px] py-2 text-[var(--text)]"
+            value={yourDeck}
+            onChange={(e) => setYourDeck(e.target.value)}
+          >
             {deckOptions}
           </select>
         </label>
-        <label>
+        <label className="grid gap-1.5 text-[0.85rem] text-[var(--dim)]">
           Opponent&apos;s deck
-          <select value={theirDeck} onChange={(e) => setTheirDeck(e.target.value)}>
+          <select
+            className="rounded-md border border-[var(--line)] bg-[var(--panel-2)] px-[10px] py-2 text-[var(--text)]"
+            value={theirDeck}
+            onChange={(e) => setTheirDeck(e.target.value)}
+          >
             {deckOptions}
           </select>
         </label>
@@ -255,7 +353,7 @@ export function GameApp() {
         Start game
       </button>
 
-      <p className="credit dim">
+      <p className="dim mt-8 text-xs">
         Imported card data and images are provided by Scryfall. Magic: The Gathering and its card names and art are
         property of Wizards of the Coast; this is an unofficial fan project.
       </p>

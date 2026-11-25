@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 :root {
   --bg: #0e0e12;
   --panel: #17171d;
@@ -20,6 +22,41 @@ body {
   color: var(--text);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   line-height: 1.4;
+}
+
+/*
+ * Tailwind's preflight zeroes default margin/padding on every element and collapses
+ * heading sizes to `inherit`. Restore sane defaults here for anything that doesn't get
+ * explicit spacing/typography utilities, so elements not yet migrated to Tailwind
+ * (across the whole app, not just the menu) don't lose their spacing.
+ */
+p,
+ul,
+ol,
+dl,
+dd {
+  margin: 0 0 0.6em;
+}
+ul,
+ol {
+  padding-left: 1.4em;
+}
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  line-height: 1.25;
+}
+h1 {
+  font-size: 1.75rem;
+  margin-bottom: 0.4em;
+}
+h2 {
+  font-size: 1.25rem;
+  margin-bottom: 0.3em;
+}
+summary {
+  cursor: pointer;
 }
 
 .dim {
@@ -51,104 +88,11 @@ body {
   font-size: 1.05rem;
 }
 
-/* ---- menu ---- */
-.menu {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 48px 24px;
-}
-.eyebrow {
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  font-size: 12px;
-  color: var(--dim);
-}
-.decks {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
-  margin: 24px 0;
-}
-.deck {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 4px 18px 14px;
-}
-.deck ul {
-  margin: 8px 0 0;
-  padding-left: 18px;
-  font-size: 0.9rem;
-}
-.pickers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  margin-bottom: 24px;
-}
-.pickers label {
-  display: grid;
-  gap: 6px;
-  font-size: 0.85rem;
-  color: var(--dim);
-}
-.pickers select {
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 8px 10px;
-  font: inherit;
-}
-
-.import {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 4px 18px 18px;
-  margin: 8px 0 24px;
-}
-.import textarea {
-  width: 100%;
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 10px;
-  font: 0.9rem ui-monospace, SFMono-Regular, Menlo, monospace;
-  resize: vertical;
-}
-.import-actions {
-  display: flex;
-  gap: 10px;
-  margin: 10px 0;
-}
-.report .rows {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  font-size: 0.88rem;
-}
-.report .rows li {
-  display: flex;
-  gap: 8px;
-  padding: 3px 0;
-  border-bottom: 1px solid #1d1d25;
-}
-.report .rows .mark {
-  width: 1.2em;
-  text-align: center;
-}
-.report .rows li.ok .mark {
-  color: var(--good);
-}
-.report .rows li.unsupported .mark,
-.report .rows li.not_found .mark {
-  color: #ff7a7a;
-}
-.reason {
-  color: var(--dim);
-}
+/* ---- menu ----
+ * The menu screen's layout is styled with Tailwind utility classes directly in
+ * GameApp.tsx. `.error` and `.warn` stay here: Board.tsx's `.notice` shares the same
+ * warning colour, kept as its own rule (see below) rather than duplicated.
+ */
 .error {
   color: #ff7a7a;
 }
@@ -156,160 +100,21 @@ body {
   color: var(--warn);
   font-size: 0.88rem;
 }
-.credit {
-  margin-top: 32px;
-  font-size: 0.75rem;
-}
 
-/* ---- game ---- */
-.game {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel);
-}
-.topbar .toggle {
-  margin-left: auto;
-  font-size: 0.85rem;
-  color: var(--dim);
-}
-.layout {
-  display: grid;
-  grid-template-columns: 1fr 260px;
-  flex: 1;
-  min-height: 0;
-}
-.board {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 16px 24px;
-  min-width: 0;
-}
-.log {
-  border-left: 1px solid var(--line);
-  background: var(--panel);
-  padding: 12px;
-  font-size: 0.8rem;
-  color: var(--dim);
-  overflow-y: auto;
-  max-height: calc(100vh - 50px);
-  position: sticky;
-  top: 0;
-}
-.log div {
-  padding: 2px 0;
-  border-bottom: 1px solid #1d1d25;
-}
-
-.row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-height: 34px;
-  align-items: flex-start;
-}
-.row.creatures {
-  min-height: 150px;
-}
-
-.player-bar {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 14px;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-}
-.player-bar.turn {
-  border-color: #50505f;
-}
-.player-bar .who {
-  font-weight: 600;
-  min-width: 80px;
-}
-.player-bar .life {
-  font-size: 1.6rem;
-  font-weight: 700;
-}
-.player-bar .meta {
-  color: var(--dim);
-  font-size: 0.8rem;
-}
-
-.middle {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px 14px;
-  display: grid;
-  gap: 8px;
-}
-.phases {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  font-size: 0.75rem;
-}
-.phases li {
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--panel-2);
-  color: var(--dim);
-}
-.phases li.now {
-  background: #2d5cff;
-  color: #fff;
-}
-.turn-line {
-  font-size: 0.85rem;
-  color: var(--dim);
-}
-.stack-flag {
-  color: var(--warn);
-}
-.stack {
-  margin: 0;
-  padding-left: 18px;
-  font-size: 0.85rem;
-  color: var(--warn);
-}
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  min-height: 38px;
-}
-.notice {
-  color: var(--warn);
-  font-size: 0.85rem;
-}
-
-.hand {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding-top: 8px;
-}
+/*
+ * ---- game ----
+ * The board's own layout is styled with Tailwind utility classes directly in
+ * Board.tsx. `.targetable`/`.active` stay defined in the cards section below (shared
+ * compound selectors with `.card`), and `.btn`/`.dim` stay here (shared with the
+ * menu) — everything else that was board-only moved to Tailwind.
+ */
 
 /* ---- cards ---- */
 .card {
   --accent: #9a9a9a;
+  --zoom: 1;
+  --ty: 0px;
+  --rot: 0deg;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -323,7 +128,18 @@ body {
   font: inherit;
   text-align: left;
   position: relative;
+  transform: translateY(var(--ty)) rotate(var(--rot)) scale(var(--zoom));
+  transform-origin: left bottom;
   transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s;
+}
+.card:hover,
+.card:focus-visible {
+  --zoom: 1.8;
+  z-index: 50;
+}
+.card.mini:hover,
+.card.mini:focus-visible {
+  --zoom: 2.4;
 }
 .card:disabled {
   cursor: default;
@@ -405,14 +221,14 @@ body {
 }
 .card.tapped {
   opacity: 0.55;
-  transform: rotate(8deg);
+  --rot: 8deg;
 }
 .card.active {
   cursor: pointer;
   box-shadow: 0 0 0 2px var(--good);
 }
 .card.active:hover {
-  transform: translateY(-3px);
+  --ty: -3px;
 }
 .card.targetable,
 .player-bar.targetable {
@@ -421,33 +237,8 @@ body {
 }
 .card.selected {
   box-shadow: 0 0 0 3px #2d5cff;
-  transform: translateY(-4px);
+  --ty: -4px;
 }
 
-/* ---- overlay ---- */
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: grid;
-  place-items: center;
-}
-.dialog {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 28px 40px;
-  text-align: center;
-}
-
-@media (max-width: 900px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-  .log {
-    border-left: none;
-    border-top: 1px solid var(--line);
-    max-height: 200px;
-    position: static;
-  }
-}
+/* .overlay/.dialog (the win/lose modal) and the <=900px responsive layout are now
+ * Tailwind utility classes directly in Board.tsx. */
