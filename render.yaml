@@ -16,3 +16,7 @@ services:
         sync: false
       - key: DIRECT_URL
         sync: false
+      # Must be the EXACT SAME value as pbandj's own SESSION_SECRET: this app has no
+      # login of its own, it verifies JWTs pbandj already issued (see src/lib/auth.ts).
+      - key: SESSION_SECRET
+        sync: false
