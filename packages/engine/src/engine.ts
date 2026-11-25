@@ -11,13 +11,14 @@ import {
   validateBlocks,
 } from "./combat";
 import { applyEffect, checkState, drawCards, opponentOf } from "./effects";
-import { isLegalTarget, legalTargets, targetSpecOf } from "./targeting";
+import { isLegalTarget, legalTargets, legalTargetsForSpec, targetSpecOf, targetSpecOfEffect } from "./targeting";
 import { planPayment } from "./mana";
 import { shuffle } from "./rng";
 import type {
   Action,
   ApplyResult,
   CardId,
+  Cost,
   Effect,
   GameState,
   PlayerId,
@@ -181,9 +182,52 @@ function beginDiscard(state: GameState, effect: Extract<Effect, { kind: "discard
   return true;
 }
 
+/**
+ * Can every component of this ability's cost currently be paid? A {T} cost needs the
+ * source untapped and, like attacking, not summoning sick unless it has haste.
+ */
+function canPayCost(rules: Ruleset, state: GameState, sourceId: CardId, costs: Cost[]): boolean {
+  const inst = state.cards[sourceId];
+  if (!inst) return false;
+  return costs.every((cost) => {
+    if (cost.kind !== "tap") return true;
+    if (inst.tapped) return false;
+    const hasHaste = rules.defs[inst.defId]?.keywords?.includes("haste") ?? false;
+    return inst.enteredTurn < state.turn || hasHaste;
+  });
+}
+
+/** Pays an already-validated cost. */
+function payCost(state: GameState, sourceId: CardId, costs: Cost[]): void {
+  const inst = state.cards[sourceId];
+  if (!inst) return;
+  for (const cost of costs) {
+    if (cost.kind === "tap") inst.tapped = true;
+  }
+}
+
 function resolveTop(rules: Ruleset, state: GameState): void {
   const item = state.stack.pop();
   if (!item) return;
+
+  if (item.kind === "ability") {
+    const effect = item.effect;
+    if (effect.kind === "discard") {
+      if (beginDiscard(state, effect, item.controller)) return; // a discard is now pending
+    } else {
+      const spec = targetSpecOfEffect(effect);
+      const target = item.targets[0];
+      if (spec && !(target && isLegalTarget(rules, state, spec, target))) {
+        state.log.push("An ability fizzles (its target is gone)");
+      } else {
+        applyEffect(rules, state, effect, item.controller, item.targets);
+      }
+    }
+    destroyDeadCreatures(rules, state);
+    checkState(state);
+    return;
+  }
+
   const inst = state.cards[item.cardId];
   const def = inst && rules.defs[inst.defId];
   const owner = inst && state.players[inst.owner];
@@ -267,6 +311,25 @@ export function validateAction(rules: Ruleset, state: GameState, action: Action)
   if (!me) return "Unknown player";
   if (action.type === "PASS") return null;
 
+  if (action.type === "ACTIVATE") {
+    if (!me.battlefield.includes(action.cardId)) return "You don't control that permanent";
+    const inst = state.cards[action.cardId];
+    const def = inst && rules.defs[inst.defId];
+    const ability = def?.abilities?.[action.abilityIndex];
+    if (!ability) return "No such ability";
+    if (!canPayCost(rules, state, action.cardId, ability.cost)) return "Cannot pay the cost";
+    const spec = targetSpecOfEffect(ability.effect);
+    const targets = action.targets ?? [];
+    if (spec) {
+      const t = targets[0];
+      if (targets.length !== 1 || !t) return "Choose a target";
+      if (!isLegalTarget(rules, state, spec, t)) return "Invalid target";
+    } else if (targets.length > 0) {
+      return "This ability has no targets";
+    }
+    return null;
+  }
+
   if (!me.hand.includes(action.cardId)) return "Card is not in your hand";
   const inst = state.cards[action.cardId];
   const def = inst && rules.defs[inst.defId];
@@ -349,6 +412,21 @@ export function getLegalActions(rules: Ruleset, state: GameState): Action[] {
       candidates.push({ type: "CAST", player, cardId });
     }
   }
+  for (const cardId of me.battlefield) {
+    const inst = state.cards[cardId];
+    const def = inst && rules.defs[inst.defId];
+    def?.abilities?.forEach((ability, abilityIndex) => {
+      if (!canPayCost(rules, state, cardId, ability.cost)) return;
+      const spec = targetSpecOfEffect(ability.effect);
+      if (spec) {
+        for (const t of legalTargetsForSpec(rules, state, spec)) {
+          candidates.push({ type: "ACTIVATE", player, cardId, abilityIndex, targets: [t] });
+        }
+      } else {
+        candidates.push({ type: "ACTIVATE", player, cardId, abilityIndex });
+      }
+    });
+  }
   return candidates.filter((a) => validateAction(rules, state, a) === null);
 }
 
@@ -406,10 +484,28 @@ export function applyAction(rules: Ruleset, state: GameState, action: Action): A
         if (land) land.tapped = true;
       }
       me.hand.splice(me.hand.indexOf(action.cardId), 1);
-      next.stack.push({ cardId: action.cardId, controller: action.player, targets: action.targets ?? [] });
+      next.stack.push({ kind: "spell", cardId: action.cardId, controller: action.player, targets: action.targets ?? [] });
       // After casting, the caster receives priority again and everyone may respond.
       next.passes = 0;
       next.log.push(`${action.player} casts ${def.name}`);
+      break;
+    }
+    case "ACTIVATE": {
+      const inst = next.cards[action.cardId];
+      const def = inst && rules.defs[inst.defId];
+      const ability = def?.abilities?.[action.abilityIndex];
+      if (!inst || !ability) return { ok: false, error: "No such ability" };
+      payCost(next, action.cardId, ability.cost);
+      next.stack.push({
+        kind: "ability",
+        sourceId: action.cardId,
+        controller: action.player,
+        effect: ability.effect,
+        targets: action.targets ?? [],
+      });
+      // Same as casting: the activator keeps priority and everyone may respond.
+      next.passes = 0;
+      next.log.push(`${action.player} activates ${def.name}`);
       break;
     }
     case "PASS": {

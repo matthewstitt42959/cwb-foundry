@@ -70,6 +70,20 @@ describe("convertScryfallCard: supported cards", () => {
     });
   });
 
+  it("converts a tap-cost activated ability with a pump effect", () => {
+    expect(convert("Rabid Rats").def).toMatchObject({
+      types: ["creature"],
+      power: 1,
+      toughness: 1,
+      abilities: [
+        {
+          cost: [{ kind: "tap" }],
+          effect: { kind: "pump", power: -1, toughness: -1, target: "blocking_creature", duration: "until_end_of_turn" },
+        },
+      ],
+    });
+  });
+
   it("converts removal, card draw and compound spells", () => {
     expect(convert("Murder").def?.effects).toEqual([{ kind: "destroy", target: "creature" }]);
     expect(convert("Divination").def?.effects).toEqual([{ kind: "draw", amount: 2, target: "self" }]);
@@ -78,6 +92,12 @@ describe("convertScryfallCard: supported cards", () => {
       { kind: "gain_life", amount: 3, target: "self" },
     ]);
     expect(convert("Lava Axe").def?.effects).toEqual([{ kind: "damage", amount: 5, target: "opponent" }]);
+  });
+
+  it("converts a pump spell (shares the same clause the Rabid Rats ability uses)", () => {
+    expect(convert("Giant Growth").def?.effects).toEqual([
+      { kind: "pump", power: 3, toughness: 3, target: "creature", duration: "until_end_of_turn" },
+    ]);
   });
 });
 
@@ -90,7 +110,6 @@ describe("convertScryfallCard: refuses to run cards it would get wrong", () => {
     ["Healing Salve", /Choose one/],
     ["Llanowar Elves", /Ability "\{T\}: Add \{G\}\."/],
     ["Counterspell", /Counter target spell/],
-    ["Giant Growth", /gets \+3\/\+3/],
     ["Brazen Borrower", /Layout "adventure"/],
     ["Delver of Secrets", /Layout "transform"/],
     ["Tarmogoyf", /Power\/toughness/],

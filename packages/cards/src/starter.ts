@@ -1,4 +1,4 @@
-import type { CardDef, CardDefs, Color, ManaCost } from "@cwb/engine";
+import type { CardDef, CardDefs, Color, Effect, ManaCost } from "@cwb/engine";
 
 /**
  * Starter set. Names and numbers are original to this project.
@@ -157,41 +157,44 @@ export const starterDecks: StarterDeck[] = [
 ];
 
 /** Human-readable rules text derived from a definition's data. */
+function effectText(e: Effect): string {
+  const who = (t: string) => (t === "self" ? "you" : "your opponent");
+  switch (e.kind) {
+    case "damage":
+      return e.target === "any"
+        ? `Deal ${e.amount} damage to any target.`
+        : e.target === "creature"
+          ? `Deal ${e.amount} damage to target creature.`
+          : `Deal ${e.amount} damage to ${who(e.target)}.`;
+    case "draw":
+      return `${cap(who(e.target))} draw${e.target === "self" ? "" : "s"} ${e.amount} cards.`;
+    case "gain_life":
+      return `${cap(who(e.target))} gain${e.target === "self" ? "" : "s"} ${e.amount} life.`;
+    case "destroy":
+      return "Destroy target creature.";
+    case "discard":
+      return `${cap(who(e.target))} discard${e.target === "self" ? "" : "s"} ${e.amount} card${e.amount === 1 ? "" : "s"}.`;
+    case "pump": {
+      const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
+      const noun = e.target === "blocking_creature" ? "target blocking creature" : "target creature";
+      return `${cap(noun)} gets ${sign(e.power)}/${sign(e.toughness)} until end of turn.`;
+    }
+    default: {
+      const exhaustive: never = e;
+      throw new Error(`Unhandled effect kind: ${(exhaustive as { kind: string }).kind}`);
+    }
+  }
+}
+
+function costText(costs: { kind: string }[]): string {
+  return costs.map((c) => (c.kind === "tap" ? "{T}" : c.kind)).join(", ");
+}
+
 export function cardText(def: CardDef): string {
   const parts: string[] = [];
   if (def.keywords?.length) parts.push(def.keywords.map((k) => k[0]?.toUpperCase() + k.slice(1)).join(", "));
-  for (const e of def.effects ?? []) {
-    const who = (t: string) => (t === "self" ? "you" : "your opponent");
-    switch (e.kind) {
-      case "damage":
-        parts.push(
-          e.target === "any"
-            ? `Deal ${e.amount} damage to any target.`
-            : e.target === "creature"
-              ? `Deal ${e.amount} damage to target creature.`
-              : `Deal ${e.amount} damage to ${who(e.target)}.`,
-        );
-        break;
-      case "draw":
-        parts.push(`${cap(who(e.target))} draw${e.target === "self" ? "" : "s"} ${e.amount} cards.`);
-        break;
-      case "gain_life":
-        parts.push(`${cap(who(e.target))} gain${e.target === "self" ? "" : "s"} ${e.amount} life.`);
-        break;
-      case "destroy":
-        parts.push("Destroy target creature.");
-        break;
-      case "discard":
-        parts.push(
-          `${cap(who(e.target))} discard${e.target === "self" ? "" : "s"} ${e.amount} card${e.amount === 1 ? "" : "s"}.`,
-        );
-        break;
-      default: {
-        const exhaustive: never = e;
-        throw new Error(`Unhandled effect kind: ${(exhaustive as { kind: string }).kind}`);
-      }
-    }
-  }
+  for (const e of def.effects ?? []) parts.push(effectText(e));
+  for (const a of def.abilities ?? []) parts.push(`${costText(a.cost)}: ${effectText(a.effect)}`);
   return parts.join(" ");
 }
 

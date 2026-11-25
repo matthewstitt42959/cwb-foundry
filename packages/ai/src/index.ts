@@ -7,10 +7,12 @@ import {
   type BlockAssignment,
   type CardDef,
   type CardId,
+  type Effect,
   type GameState,
   type ManaCost,
   type PlayerId,
   type Ruleset,
+  type Target,
 } from "@cwb/engine";
 
 /**
@@ -141,9 +143,22 @@ function decideDiscard(rules: Ruleset, state: GameState, me: PlayerId): Action {
 // ---- main phase -----------------------------------------------------------
 
 function decideMain(rules: Ruleset, state: GameState, me: PlayerId, legal: Action[]): Action | null {
+  // Activated abilities (e.g. a combat trick) are worth considering any time the AI has
+  // priority, unlike casting sorcery-speed spells, which still waits for its own main phase.
+  let bestActivation: { action: Action; score: number } | null = null;
+  for (const a of legal) {
+    if (a.type !== "ACTIVATE") continue;
+    const inst = state.cards[a.cardId];
+    const ability = rules.defs[inst?.defId ?? ""]?.abilities?.[a.abilityIndex];
+    if (!ability) continue;
+    const score = scoreAbility(rules, state, me, ability.effect, a.targets?.[0]);
+    if (score > 0 && (!bestActivation || score > bestActivation.score)) bestActivation = { action: a, score };
+  }
+  if (bestActivation) return bestActivation.action;
+
   const phase = rules.pack.phases[state.phaseIndex];
   const myMain = state.activePlayer === me && !!phase?.main && state.stack.length === 0;
-  if (!myMain) return null; // never respond; let the stack resolve
+  if (!myMain) return null; // never respond by casting; let the stack resolve
 
   const lands = legal.filter((a): a is Extract<Action, { type: "PLAY_LAND" }> => a.type === "PLAY_LAND");
   if (lands.length > 0) return bestLand(rules, state, me, lands);
@@ -219,6 +234,19 @@ function scoreSpell(
   }
   if (!hasMain && onlyLifeGain && myLife > 10) return -1; // standalone life gain only when hurting
   return main + bonus;
+}
+
+/**
+ * Only knows how to use one shape so far: a negative "pump" (debuff) aimed at an
+ * opponent's creature, worth using if it's lethal on its own (e.g. Rabid Rats' -1/-1
+ * finishing off a blocker). Anything else scores 0 (not worth activating for).
+ */
+function scoreAbility(rules: Ruleset, state: GameState, me: PlayerId, effect: Effect, target?: Target): number {
+  if (effect.kind !== "pump" || effect.power > 0 || effect.toughness > 0) return 0;
+  if (!target || target.kind !== "card") return 0;
+  if (state.cards[target.id]?.owner === me) return -1; // never weaken our own creature
+  if (toughnessLeft(rules, state, target.id) + effect.toughness > 0) return -1; // wouldn't kill it
+  return 40 + value(rules, state, target.id);
 }
 
 /** Play the land whose colour the hand needs most and the battlefield has least of. */

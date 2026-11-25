@@ -1,4 +1,4 @@
-import type { CardDef, CardType, Effect, Keyword, ManaCost } from "@cwb/engine";
+import type { Ability, CardDef, CardType, Effect, Keyword, ManaCost } from "@cwb/engine";
 import type { ScryfallCard } from "./types";
 
 /**
@@ -91,7 +91,24 @@ function parseClause(clause: string): Effect | null {
     const n = parseCount(m[1] ?? "");
     return n ? { kind: "discard", amount: n, target: "opponent" } : null;
   }
+  if ((m = clause.match(/^target (blocking creature|creature) gets ([+-]\d+)\/([+-]\d+) until end of turn$/))) {
+    return {
+      kind: "pump",
+      power: Number(m[2]),
+      toughness: Number(m[3]),
+      target: m[1] === "blocking creature" ? "blocking_creature" : "creature",
+      duration: "until_end_of_turn",
+    };
+  }
   return null;
+}
+
+/** Parses a single tap-cost activated ability line, e.g. "{T}: <effect clause>.". */
+function parseActivatedAbility(normalizedLine: string): Ability | null {
+  const m = normalizedLine.match(/^\{t\}:\s*(.+?)\.?$/i);
+  if (!m) return null;
+  const effect = parseClause((m[1] ?? "").trim().toLowerCase());
+  return effect ? { cost: [{ kind: "tap" }], effect } : null;
 }
 
 function escapeRegExp(s: string): string {
@@ -202,21 +219,31 @@ export function convertScryfallCard(card: ScryfallCard): ConvertResult {
     }
     const keywords: Keyword[] = [];
     const etbEffects: Effect[] = [];
+    const abilities: Ability[] = [];
     const escapedName = escapeRegExp(card.name);
     for (const line of text.split("\n").map(stripReminderText).filter(Boolean)) {
       const normalized = line.replace(new RegExp(escapedName, "gi"), "~").replace(/\bthis creature\b/gi, "~");
+
       const etb = normalized.match(/^when ~ enters(?: the battlefield)?,\s*(.+?)\.?$/i);
       const etbEffect = etb ? parseClause((etb[1] ?? "").trim().toLowerCase()) : null;
       if (etbEffect) {
         etbEffects.push(etbEffect);
         continue;
       }
+
+      const ability = parseActivatedAbility(normalized);
+      if (ability) {
+        abilities.push(ability);
+        continue;
+      }
+
       const kws = parseKeywordLine(line);
       if (kws) keywords.push(...kws);
       else reasons.push(`Ability "${line}" isn't supported yet`);
     }
     if (keywords.length) base.keywords = [...new Set(keywords)];
     if (etbEffects.length) base.effects = etbEffects;
+    if (abilities.length) base.abilities = abilities;
   } else {
     const { effects, problems: textProblems } = parseSpellText(text, card.name);
     reasons.push(...textProblems);

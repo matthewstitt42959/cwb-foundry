@@ -21,6 +21,14 @@ function hasKeyword(rules: Ruleset, state: GameState, id: CardId, kw: Keyword): 
   return !!defOf(rules, state, id)?.keywords?.includes(kw);
 }
 
+/** Power/toughness including temporary deltas from effects like "pump". */
+export function effectivePower(rules: Ruleset, state: GameState, id: CardId): number {
+  return (defOf(rules, state, id)?.power ?? 0) + (state.cards[id]?.tempPower ?? 0);
+}
+export function effectiveToughness(rules: Ruleset, state: GameState, id: CardId): number {
+  return (defOf(rules, state, id)?.toughness ?? 0) + (state.cards[id]?.tempToughness ?? 0);
+}
+
 export function defendingPlayer(state: GameState): PlayerId {
   return opponentOf(state, state.activePlayer);
 }
@@ -98,8 +106,8 @@ export function declareAttackers(rules: Ruleset, state: GameState, attackers: Ca
 export function resolveCombatDamage(rules: Ruleset, state: GameState): void {
   const combat = state.combat;
   if (!combat) return;
-  const power = (id: CardId) => defOf(rules, state, id)?.power ?? 0;
-  const toughness = (id: CardId) => defOf(rules, state, id)?.toughness ?? 0;
+  const power = (id: CardId) => effectivePower(rules, state, id);
+  const toughness = (id: CardId) => effectiveToughness(rules, state, id);
 
   const dealt: Record<CardId, number> = {};
   const deathtouched = new Set<CardId>();
@@ -143,7 +151,11 @@ export function resolveCombatDamage(rules: Ruleset, state: GameState): void {
   }
 }
 
-/** State-based action: creatures with damage >= toughness, or any deathtouch damage, die. */
+/**
+ * State-based action: creatures die to lethal damage, any deathtouch damage, or
+ * having zero or less effective toughness (e.g. from a large enough "pump" debuff,
+ * with no damage marked at all).
+ */
 export function destroyDeadCreatures(rules: Ruleset, state: GameState): void {
   for (const pid of state.order) {
     const p = state.players[pid];
@@ -152,8 +164,9 @@ export function destroyDeadCreatures(rules: Ruleset, state: GameState): void {
     for (const id of p.battlefield) {
       const inst = state.cards[id];
       const def = defOf(rules, state, id);
+      const toughness = effectiveToughness(rules, state, id);
       const dead =
-        inst && def?.types.includes("creature") && (inst.damage >= (def.toughness ?? 0) || inst.deathtouch);
+        inst && def?.types.includes("creature") && (inst.damage >= toughness || inst.deathtouch || toughness <= 0);
       if (dead && inst) {
         state.players[inst.owner]?.graveyard.push(id);
         state.log.push(`${def?.name ?? id} dies`);
@@ -169,5 +182,7 @@ export function clearDamage(state: GameState): void {
   for (const inst of Object.values(state.cards)) {
     inst.damage = 0;
     inst.deathtouch = false;
+    inst.tempPower = 0;
+    inst.tempToughness = 0;
   }
 }

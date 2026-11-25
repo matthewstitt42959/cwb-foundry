@@ -100,7 +100,7 @@ describe("the stack and priority", () => {
     expect(s.priority).toBe("p2");
 
     s = ok(s, { type: "CAST", player: "p2", cardId: tonic.id }); // response
-    expect(s.stack.map((i) => i.cardId)).toEqual([bolt.id, tonic.id]);
+    expect(s.stack.map((i) => (i.kind === "spell" ? i.cardId : i.sourceId))).toEqual([bolt.id, tonic.id]);
 
     // Both pass: top of stack (tonic) resolves first.
     s = ok(s, { type: "PASS", player: "p2" });
@@ -210,6 +210,50 @@ describe("creatures with enter-the-battlefield effects", () => {
     s = ok(s, { type: "PASS", player: "p2" });
     expect(s.players.p1?.battlefield).toContain(imp.id);
     expect(s.pending).toBeNull(); // nothing to discard: no pending choice
+  });
+});
+
+describe("activated abilities", () => {
+  it("pays the tap cost, goes on the stack, and resolves like a spell", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const healer = give(s, "p1", "healer", "battlefield");
+    s = healer.state;
+
+    const activate: Action = { type: "ACTIVATE", player: "p1", cardId: healer.id, abilityIndex: 0 };
+    expect(getLegalActions(rules, s)).toContainEqual(activate);
+
+    s = ok(s, activate);
+    expect(s.cards[healer.id]?.tapped).toBe(true); // cost paid immediately
+    expect(s.stack).toHaveLength(1);
+    expect(s.priority).toBe("p1"); // activator keeps priority, same as casting
+
+    s = ok(s, { type: "PASS", player: "p1" });
+    s = ok(s, { type: "PASS", player: "p2" }); // both pass: the ability resolves
+    expect(s.players.p1?.life).toBe(21);
+    expect(s.stack).toHaveLength(0);
+  });
+
+  it("rejects activating an already-tapped source", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const healer = give(s, "p1", "healer", "battlefield");
+    s = clone(healer.state);
+    (s.cards[healer.id] as { tapped: boolean }).tapped = true;
+
+    expect(applyAction(rules, s, { type: "ACTIVATE", player: "p1", cardId: healer.id, abilityIndex: 0 })).toEqual({
+      ok: false,
+      error: "Cannot pay the cost",
+    });
+  });
+
+  it("rejects activating a permanent you don't control", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const healer = give(s, "p1", "healer", "battlefield");
+    s = ok(healer.state, { type: "PASS", player: "p1" }); // priority passes to p2, phase doesn't advance
+
+    expect(applyAction(rules, s, { type: "ACTIVATE", player: "p2", cardId: healer.id, abilityIndex: 0 })).toEqual({
+      ok: false,
+      error: "You don't control that permanent",
+    });
   });
 });
 
