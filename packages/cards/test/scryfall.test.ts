@@ -136,6 +136,29 @@ describe("parseDecklist", () => {
   it("handles Windows line endings", () => {
     expect(parseDecklist("2 Forest\r\n1 Island\r\n").entries).toHaveLength(2);
   });
+
+  it("parses Forge .dck exports: metadata, section headers and set-coded lines", () => {
+    const { entries, skipped } = parseDecklist(
+      [
+        "[metadata]",
+        "Name=Rat commander (Marrow-Gnawer)",
+        "Deck Type=constructed",
+        "[Commander]",
+        "1 Marrow-Gnawer|CHK",
+        "[Main]",
+        "1 Murder|M13",
+        "31 Swamp|LEA|2",
+        "[sideboard]",
+        "2 Doom Blade|M13",
+      ].join("\n"),
+    );
+    expect(entries).toEqual([
+      { name: "Marrow-Gnawer", count: 1 },
+      { name: "Murder", count: 1 },
+      { name: "Swamp", count: 31 },
+    ]);
+    expect(skipped).toEqual([]);
+  });
 });
 
 // ---- client -----------------------------------------------------------------
