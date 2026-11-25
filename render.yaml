@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: cwb-foundry
+    runtime: node
+    plan: free
+    # No rootDir: this is an npm workspaces monorepo, so `npm install` has to run at
+    # the repo root for @cwb/engine, @cwb/cards and @cwb/ai to link correctly. The web
+    # app itself lives in apps/web.
+    buildCommand: npm install && npx prisma generate --schema=apps/web/prisma/schema.prisma && npx prisma db push --schema=apps/web/prisma/schema.prisma --accept-data-loss && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      # Same Supabase Postgres instance as pbandj, scoped to the cwb_foundry schema
+      # (see apps/web/.env.example). Set these in the Render dashboard, not here.
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false

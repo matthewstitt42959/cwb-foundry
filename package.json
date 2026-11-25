@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "npm -w @cwb/web run dev",
     "build": "npm -w @cwb/web run build",
+    "start": "npm -w @cwb/web run start",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p packages/engine --noEmit && tsc -p packages/cards --noEmit && tsc -p packages/ai --noEmit && npm -w @cwb/web run typecheck"
