@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { applyAction, createGame, type Action, type CardDefs, type GameState, type Ruleset } from "@cwb/engine";
 import {
   importDecklist,
@@ -31,12 +31,47 @@ const IMPORTED = "imported";
 const CACHE_KEY = "cwb:scryfall-cache:v2";
 const MIN_IMPORT_CARDS = 10;
 
+/**
+ * There is no login here: this recognizes the same account pbandj already issued.
+ * pbandj hands its current token to this app via a URL fragment (never sent to a
+ * server, never logged) when a logged-in user clicks through from its Hub; this app
+ * just stores it and sends it back as a bearer token on save/delete.
+ */
+const TOKEN_KEY = "cwb-foundry-token";
+const PBANDJ_URL = "https://playbyjayrpg.com/";
+
+interface AuthUser {
+  userId: string;
+  username: string;
+}
+
+/** Reads a JWT's claims without verifying the signature — display only. The API
+ * routes verify the real signature server-side; this just drives the UI. */
+function decodeToken(token: string): AuthUser | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    const claims = JSON.parse(json) as { userId?: unknown; username?: unknown; exp?: unknown };
+    if (typeof claims.userId !== "string" || typeof claims.username !== "string") return null;
+    if (typeof claims.exp === "number" && claims.exp * 1000 < Date.now()) return null; // expired
+    return { userId: claims.userId, username: claims.username };
+  } catch {
+    return null;
+  }
+}
+
 /** A decklist saved via the `/api/decks` route (backed by the SavedDeck table). */
 interface SavedDecklist {
   id: string;
   name: string;
   text: string;
+  folder?: string | null;
+  userId?: string | null;
+  ownerName?: string | null;
 }
+
+const UNSORTED = "Unsorted";
 
 function loadCache(): ImportCache {
   const cache: ImportCache = new Map();
@@ -78,11 +113,39 @@ export function GameApp() {
 
   const [savedDecks, setSavedDecks] = useState<SavedDecklist[]>([]);
   const [saveName, setSaveName] = useState("");
+  const [saveFolder, setSaveFolder] = useState("");
   const [savingDeck, setSavingDeck] = useState(false);
   const [savedDecksError, setSavedDecksError] = useState("");
+  const [folderDrafts, setFolderDrafts] = useState<Record<string, string>>({});
+  const [me, setMe] = useState<AuthUser | null>(null);
+  const token = useRef<string | null>(null);
 
   useEffect(() => {
     cache.current = loadCache();
+  }, []);
+
+  useEffect(() => {
+    // One-time handoff from pbandj: #token=... in the URL, never sent to any server.
+    const hash = window.location.hash;
+    const match = hash.startsWith("#") ? new URLSearchParams(hash.slice(1)).get("token") : null;
+    const stored = match ?? window.localStorage.getItem(TOKEN_KEY);
+    if (match) {
+      try {
+        window.localStorage.setItem(TOKEN_KEY, match);
+      } catch {
+        /* private mode or full storage: still usable for this session via the ref */
+      }
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+    if (stored) {
+      const claims = decodeToken(stored);
+      if (claims) {
+        token.current = stored;
+        setMe(claims);
+      } else {
+        window.localStorage.removeItem(TOKEN_KEY);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -92,39 +155,100 @@ export function GameApp() {
       .catch(() => setSavedDecksError("Couldn't load saved decks"));
   }, []);
 
+  const signOut = () => {
+    token.current = null;
+    setMe(null);
+    try {
+      window.localStorage.removeItem(TOKEN_KEY);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const saveCurrentDeck = async () => {
     const name = saveName.trim();
-    if (!name || !importText.trim()) return;
+    if (!name || !importText.trim() || !token.current) return;
     setSavingDeck(true);
     setSavedDecksError("");
     try {
       const res = await fetch("/api/decks", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, text: importText }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token.current}` },
+        body: JSON.stringify({ name, text: importText, folder: saveFolder.trim() }),
       });
+      if (res.status === 401) {
+        signOut();
+        throw new Error("Your login expired — log in again via Play by Jay");
+      }
       if (!res.ok) throw new Error("Save failed");
       const deck = (await res.json()) as SavedDecklist;
       setSavedDecks((cur) => [...cur, deck]);
       setSaveName("");
-    } catch {
-      setSavedDecksError("Couldn't save this deck");
+      setSaveFolder("");
+    } catch (e) {
+      setSavedDecksError(e instanceof Error ? e.message : "Couldn't save this deck");
     } finally {
       setSavingDeck(false);
     }
   };
 
   const deleteSavedDeck = async (id: string) => {
+    if (!token.current) return;
     const removed = savedDecks.find((d) => d.id === id);
     setSavedDecks((cur) => cur.filter((d) => d.id !== id)); // optimistic
     try {
-      const res = await fetch(`/api/decks/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/decks/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token.current}` },
+      });
+      if (res.status === 401) signOut();
       if (!res.ok) throw new Error("Delete failed");
     } catch {
       setSavedDecksError("Couldn't delete that deck");
       if (removed) setSavedDecks((cur) => [...cur, removed]); // restore on failure
     }
   };
+
+  const moveDeckFolder = async (id: string, folder: string) => {
+    if (!token.current) return;
+    const prior = savedDecks.find((d) => d.id === id)?.folder ?? "";
+    const next = folder.trim();
+    if (next === (prior ?? "")) return;
+    setSavedDecks((cur) => cur.map((d) => (d.id === id ? { ...d, folder: next || null } : d))); // optimistic
+    try {
+      const res = await fetch(`/api/decks/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token.current}` },
+        body: JSON.stringify({ folder: next }),
+      });
+      if (res.status === 401) signOut();
+      if (!res.ok) throw new Error("Move failed");
+    } catch {
+      setSavedDecksError("Couldn't move that deck");
+      setSavedDecks((cur) => cur.map((d) => (d.id === id ? { ...d, folder: prior } : d))); // restore on failure
+    }
+  };
+
+  // Every distinct folder name in use, for the "move to folder" suggestions.
+  const folderNames = useMemo(
+    () => [...new Set(savedDecks.map((d) => d.folder?.trim()).filter((f): f is string => !!f))].sort(),
+    [savedDecks],
+  );
+
+  // Saved decks grouped by folder, alphabetical, with ungrouped decks last.
+  const groupedDecks = useMemo(() => {
+    const groups = new Map<string, SavedDecklist[]>();
+    for (const d of savedDecks) {
+      const key = d.folder?.trim() || UNSORTED;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(d);
+    }
+    return [...groups.entries()].sort(([a], [b]) => {
+      if (a === UNSORTED) return 1;
+      if (b === UNSORTED) return -1;
+      return a.localeCompare(b);
+    });
+  }, [savedDecks]);
 
   const importedUsable = !!imported && imported.playableCount >= MIN_IMPORT_CARDS;
   const defsFor = (): CardDefs => imported?.defs ?? {};
@@ -246,43 +370,102 @@ export function GameApp() {
           placeholder={"4 Lightning Bolt\n20 Mountain\n..."}
           aria-label="Decklist"
         />
-        <div className="my-[10px] flex flex-wrap gap-[10px]">
+        <div className="my-[10px] flex flex-wrap items-center gap-[10px]">
           <button type="button" className="btn primary" onClick={runImport} disabled={importing || !importText.trim()}>
             {importing ? `Importing… ${progress}` : "Import"}
           </button>
-          <input
-            className="rounded-md border border-[var(--line)] bg-[var(--panel-2)] px-[10px] py-2 text-[var(--text)]"
-            value={saveName}
-            onChange={(e) => setSaveName(e.target.value)}
-            placeholder="Name this list to save it"
-            aria-label="Name for saving this decklist"
-          />
-          <button
-            type="button"
-            className="btn"
-            onClick={saveCurrentDeck}
-            disabled={savingDeck || !saveName.trim() || !importText.trim()}
-          >
-            {savingDeck ? "Saving…" : "Save"}
-          </button>
+          {me ? (
+            <>
+              <input
+                className="rounded-md border border-[var(--line)] bg-[var(--panel-2)] px-[10px] py-2 text-[var(--text)]"
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                placeholder="Name this list to save it"
+                aria-label="Name for saving this decklist"
+              />
+              <input
+                list="cwb-folder-names"
+                className="rounded-md border border-[var(--line)] bg-[var(--panel-2)] px-[10px] py-2 text-[var(--text)]"
+                value={saveFolder}
+                onChange={(e) => setSaveFolder(e.target.value)}
+                placeholder="Folder (optional)"
+                aria-label="Folder to save this decklist into"
+              />
+              <button
+                type="button"
+                className="btn"
+                onClick={saveCurrentDeck}
+                disabled={savingDeck || !saveName.trim() || !importText.trim()}
+              >
+                {savingDeck ? "Saving…" : "Save"}
+              </button>
+              <span className="text-[0.8rem] dim">Signed in as {me.username}</span>
+            </>
+          ) : (
+            <span className="text-[0.85rem] dim">
+              <a href={PBANDJ_URL} className="underline">
+                Log in via Play by Jay
+              </a>{" "}
+              to save your own decks.
+            </span>
+          )}
         </div>
+        {folderNames.length > 0 && (
+          <datalist id="cwb-folder-names">
+            {folderNames.map((f) => (
+              <option key={f} value={f} />
+            ))}
+          </datalist>
+        )}
         {savedDecks.length > 0 && (
-          <div className="mb-[10px] flex flex-wrap gap-[10px]">
-            {savedDecks.map((d) => (
-              <span key={d.id} className="flex items-center gap-1">
-                <button type="button" className="btn" onClick={() => setImportText(d.text)} disabled={importing}>
-                  Load &quot;{d.name}&quot;
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => deleteSavedDeck(d.id)}
-                  aria-label={`Delete saved deck "${d.name}"`}
-                  title="Delete"
-                >
-                  ✕
-                </button>
-              </span>
+          <div className="mb-[10px] flex flex-col gap-[10px]">
+            {groupedDecks.map(([folder, decks]) => (
+              <div key={folder}>
+                <p className="mb-1 text-[0.75rem] uppercase tracking-[0.1em] dim">{folder}</p>
+                <div className="flex flex-wrap gap-[10px]">
+                  {decks.map((d) => {
+                    const owned = !!me && d.userId === me.userId;
+                    const draft = folderDrafts[d.id] ?? d.folder ?? "";
+                    return (
+                      <span key={d.id} className="flex items-center gap-1">
+                        <button type="button" className="btn" onClick={() => setImportText(d.text)} disabled={importing}>
+                          Load &quot;{d.name}&quot;{d.ownerName ? ` (${d.ownerName})` : ""}
+                        </button>
+                        {owned && (
+                          <>
+                            <input
+                              list="cwb-folder-names"
+                              className="w-[120px] rounded-md border border-[var(--line)] bg-[var(--panel-2)] px-[6px] py-1 text-[0.8rem] text-[var(--text)]"
+                              value={draft}
+                              onChange={(e) => setFolderDrafts((cur) => ({ ...cur, [d.id]: e.target.value }))}
+                              placeholder="Unsorted"
+                              aria-label={`Folder for "${d.name}"`}
+                            />
+                            <button
+                              type="button"
+                              className="btn"
+                              onClick={() => moveDeckFolder(d.id, draft)}
+                              disabled={draft.trim() === (d.folder?.trim() ?? "")}
+                              title="Move to this folder"
+                            >
+                              Move
+                            </button>
+                            <button
+                              type="button"
+                              className="btn"
+                              onClick={() => deleteSavedDeck(d.id)}
+                              aria-label={`Delete saved deck "${d.name}"`}
+                              title="Delete"
+                            >
+                              ✕
+                            </button>
+                          </>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
           </div>
         )}

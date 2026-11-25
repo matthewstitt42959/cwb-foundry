@@ -14,10 +14,19 @@ datasource db {
 /// Decklists saved from the menu's Import panel (replaces the hardcoded
 /// SAVED_DECKLISTS array in GameApp.tsx). Plain decklist text only — the cards
 /// themselves still come from Scryfall at import time, never stored here.
+///
+/// userId/ownerName come from a JWT issued by pbandj (see ../src/lib/auth.ts) —
+/// there is no User table here. Null means an unowned "house" deck, visible and
+/// loadable by everyone but not deletable by anyone without a matching userId.
 model SavedDeck {
   id        String   @id @default(cuid())
   name      String
   text      String
+  /// Free-text grouping label for the UI (e.g. "Rats") — not a hierarchy, not a
+  /// separate table. Null/empty means ungrouped ("Unsorted" in the UI).
+  folder    String?
+  userId    String?
+  ownerName String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
