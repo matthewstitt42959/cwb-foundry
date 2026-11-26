@@ -30,6 +30,8 @@ const IMPORTED = "imported";
  */
 const CACHE_KEY = "cwb:scryfall-cache:v2";
 const MIN_IMPORT_CARDS = 10;
+/** Prefix for deck-picker values that point at a saved decklist. */
+const SAVED = "saved:";
 
 /**
  * There is no login here: this recognizes the same account pbandj already issued.
@@ -123,6 +125,10 @@ export function GameApp() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [me, setMe] = useState<AuthUser | null>(null);
   const token = useRef<string | null>(null);
+
+  /** Saved decklists already converted for play, keyed by deck id. `text` detects later edits. */
+  const [converted, setConverted] = useState<Record<string, { text: string; deck?: ImportedDeck; error?: string }>>({});
+  const requested = useRef(new Map<string, string>());
 
   useEffect(() => {
     cache.current = loadCache();
@@ -297,17 +303,72 @@ export function GameApp() {
     });
   }, [savedDecks]);
 
+  const savedFor = (value: string) =>
+    value.startsWith(SAVED) ? savedDecks.find((d) => d.id === value.slice(SAVED.length)) : undefined;
+
+  /** Look up a saved deck's cards on Scryfall, once per version of its text. */
+  const convertSaved = async (value: string) => {
+    const saved = savedFor(value);
+    if (!saved || requested.current.get(saved.id) === saved.text) return;
+    const { id, text } = saved;
+    requested.current.set(id, text);
+    setConverted((cur) => ({ ...cur, [id]: { text } }));
+    try {
+      const deck = await importDecklist(text, { fetch: (url, init) => window.fetch(url, init), cache: cache.current });
+      saveCache(cache.current);
+      setConverted((cur) => ({ ...cur, [id]: { text, deck } }));
+    } catch (e) {
+      requested.current.delete(id); // allow a retry
+      setConverted((cur) => ({ ...cur, [id]: { text, error: e instanceof Error ? e.message : "Import failed" } }));
+    }
+  };
+
+  useEffect(() => {
+    void convertSaved(yourDeck);
+    void convertSaved(theirDeck);
+  }, [yourDeck, theirDeck, savedDecks]);
+
+  // A saved deck can be deleted while it's picked: fall back to a starter deck.
+  useEffect(() => {
+    if (yourDeck.startsWith(SAVED) && !savedFor(yourDeck)) setYourDeck(starterDecks[0]?.id ?? "");
+    if (theirDeck.startsWith(SAVED) && !savedFor(theirDeck)) setTheirDeck(starterDecks[1]?.id ?? "");
+  }, [yourDeck, theirDeck, savedDecks]);
+
   const importedUsable = !!imported && imported.playableCount >= MIN_IMPORT_CARDS;
-  const defsFor = (): CardDefs => imported?.defs ?? {};
 
-  const deckCards = (id: string): string[] =>
-    id === IMPORTED ? (imported?.cards ?? []) : (starterDecks.find((d) => d.id === id)?.cards ?? []);
+  /** The cards behind a picker value, or why it can't be played yet. */
+  const resolveDeck = (value: string): { cards: string[]; defs: CardDefs; note: string; ready: boolean } => {
+    const none = { cards: [], defs: {}, ready: false };
+    if (value === IMPORTED) {
+      return imported ? { ...imported, note: "", ready: importedUsable } : { ...none, note: "Nothing imported" };
+    }
+    const saved = savedFor(value);
+    if (!saved) {
+      const cards = starterDecks.find((d) => d.id === value)?.cards ?? [];
+      return { cards, defs: {}, note: "", ready: cards.length > 0 };
+    }
+    const entry = converted[saved.id];
+    if (entry?.text !== saved.text || (!entry.deck && !entry.error)) return { ...none, note: "Loading cards…" };
+    if (!entry.deck) return { ...none, note: `Couldn't load: ${entry.error}` };
+    const { cards, defs, playableCount, skippedCount } = entry.deck;
+    const ready = playableCount >= MIN_IMPORT_CARDS;
+    const note = !ready
+      ? `Only ${playableCount} playable cards; need ${MIN_IMPORT_CARDS}`
+      : skippedCount > 0
+        ? `${playableCount} playable, ${skippedCount} skipped`
+        : "";
+    return { cards, defs, note, ready };
+  };
 
-  const start = (mine: string, theirs: string) => {
-    const rules = makeRules(defsFor());
+  const mine = resolveDeck(yourDeck);
+  const theirs = resolveDeck(theirDeck);
+
+  const start = () => {
+    if (!mine.ready || !theirs.ready) return;
+    const rules = makeRules({ ...mine.defs, ...theirs.defs });
     const seed = Math.floor(Math.random() * 2 ** 31);
     const initial = createGame(rules, {
-      decks: { [HUMAN]: deckCards(mine), [BOT]: deckCards(theirs) },
+      decks: { [HUMAN]: mine.cards, [BOT]: theirs.cards },
       seed,
     });
     setSession({ rules, state: autoplay(rules, initial, { stopEverywhere }), version: 0, seed });
@@ -365,6 +426,16 @@ export function GameApp() {
         </option>
       ))}
       {importedUsable && <option value={IMPORTED}>Imported deck ({imported?.playableCount} cards)</option>}
+      {savedDecks.length > 0 && (
+        <optgroup label="Saved decks">
+          {savedDecks.map((d) => (
+            <option key={d.id} value={SAVED + d.id}>
+              {d.name}
+              {d.ownerName ? ` · ${d.ownerName}` : ""}
+            </option>
+          ))}
+        </optgroup>
+      )}
     </>
   );
 
@@ -527,6 +598,7 @@ export function GameApp() {
         aria-label="Your saved decks"
       >
         <h2 className="text-[1rem]">Saved decks</h2>
+        {savedDecksError && <p className="error">{savedDecksError}</p>}
         {savedDecks.length === 0 ? (
           <p className="text-[0.85rem] dim">None yet — save a decklist from the import panel.</p>
         ) : (
@@ -620,9 +692,10 @@ export function GameApp() {
           >
             {deckOptions}
           </select>
+          {mine.note && <span className="warn">{mine.note}</span>}
         </label>
         <label className="grid gap-1.5 text-[0.85rem] text-[var(--dim)]">
-          Opponent&apos;s deck
+          AI&apos;s deck
           <select
             className="rounded-md border border-[var(--line)] bg-[var(--panel-2)] px-[10px] py-2 text-[var(--text)]"
             value={theirDeck}
@@ -630,10 +703,11 @@ export function GameApp() {
           >
             {deckOptions}
           </select>
+          {theirs.note && <span className="warn">{theirs.note}</span>}
         </label>
       </div>
 
-      <button type="button" className="btn primary big" onClick={() => start(yourDeck, theirDeck)}>
+      <button type="button" className="btn primary big" onClick={start} disabled={!mine.ready || !theirs.ready}>
         Start game
       </button>
 

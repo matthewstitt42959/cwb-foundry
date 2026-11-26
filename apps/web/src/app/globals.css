@@ -83,6 +83,10 @@ summary {
 .btn.primary:hover {
   background: #4a73ff;
 }
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 .btn.big {
   padding: 12px 28px;
   font-size: 1.05rem;
