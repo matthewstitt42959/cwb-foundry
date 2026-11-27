@@ -9,7 +9,7 @@ npm install
 npm run dev     # then open http://localhost:3000
 ```
 
-Pick a deck for each side and play against the AI in your browser. Click a land or spell in your hand to play it. Spells with targets (burn, removal) enter an aiming mode: click a creature or a player's life total, or press Esc to cancel. When it's time to attack or block you'll be prompted: click your creatures to select attackers, or click one of your creatures and then an attacker to block it. "Stop at every step" in the top bar gives you priority at every step instead of skipping steps where nothing is happening.
+Pick a deck for you and one for the AI (starter, imported or saved), then play in your browser. Click a land or spell in your hand to play it. Spells with targets (burn, removal) enter an aiming mode: click a creature or a player's life total, or press Esc to cancel. When it's time to attack or block you'll be prompted: click your creatures to select attackers, or click one of your creatures and then an attacker to block it. "Stop at every step" in the top bar gives you priority at every step instead of skipping steps where nothing is happening.
 
 ## Import a real decklist (Scryfall)
 
