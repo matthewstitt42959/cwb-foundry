@@ -172,6 +172,8 @@ function effectText(e: Effect): string {
       return `${cap(who(e.target))} gain${e.target === "self" ? "" : "s"} ${e.amount} life.`;
     case "destroy":
       return "Destroy target creature.";
+    case "create_token":
+      return `Create ${e.count === 1 ? "a" : e.count} ${e.label}${e.count === 1 ? "" : "s"}.`;
     case "search_library":
       return `Search your library for a ${cap(e.subtype)} card, reveal it, put it into your hand, then shuffle.`;
     case "damage_all":

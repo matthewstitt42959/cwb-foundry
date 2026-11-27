@@ -4,6 +4,7 @@ import {
   attackCandidates,
   blockCandidates,
   clone,
+  effectivePower,
   getLegalActions,
   type Action,
   type CardId,
@@ -344,6 +345,69 @@ describe("evasion keywords", () => {
       ok: false,
       error: "That creature can't block",
     });
+  });
+});
+
+describe("tokens and computed power", () => {
+  it("a creature's enter effect creates tokens that are summoning sick", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const brood = give(s, "p1", "brood", "hand");
+    s = ok(brood.state, { type: "CAST", player: "p1", cardId: brood.id });
+    s = passRound(s);
+    const tokens = (s.players.p1?.battlefield ?? []).filter((id) => s.cards[id]?.defId === "ratToken");
+    expect(tokens).toHaveLength(2);
+    expect(new Set(tokens).size).toBe(2); // unique ids
+    expect(s.cards[tokens[0] as CardId]?.owner).toBe("p1");
+    expect(attackCandidates(rules, s)).not.toContain(tokens[0]);
+    expect(s.log).toContain("p1 creates 2 1/1 black Rat creature tokens");
+  });
+
+  it("a token that dies ceases to exist instead of going to the graveyard", () => {
+    const { s, p1Ids, p2Ids } = atAttackers(["giant"], ["ratToken"]);
+    const [giant] = p1Ids as [CardId];
+    const [token] = p2Ids as [CardId];
+    let g = passRound(ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [giant] }));
+    g = ok(g, { type: "DECLARE_BLOCKERS", player: "p2", blocks: [{ blocker: token, attacker: giant }] });
+    g = passRound(g);
+    expect(g.players.p2?.battlefield).not.toContain(token);
+    expect(g.players.p2?.graveyard).not.toContain(token);
+  });
+
+  it("a token's explicit colour decides who it can block under fear", () => {
+    const { s, p1Ids, p2Ids } = atAttackers(["shade"], ["ratToken", "ratling"]);
+    const [shade] = p1Ids as [CardId];
+    const [token, ratling] = p2Ids as [CardId, CardId];
+    const g = passRound(ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [shade] }));
+    const block = (b: CardId) =>
+      applyAction(rules, g, { type: "DECLARE_BLOCKERS", player: "p2", blocks: [{ blocker: b, attacker: shade }] });
+    expect(block(token).ok).toBe(true); // black token
+    expect(block(ratling).ok).toBe(false); // colourless
+  });
+
+  it("power can be the number of Rats you control (itself included)", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const sw = give(s, "p1", "swarm", "battlefield");
+    s = give(sw.state, "p1", "ratling", "battlefield").state;
+    s = give(s, "p1", "ratToken", "battlefield").state;
+    s = give(s, "p2", "ratling", "battlefield").state; // the opponent's Rat doesn't count
+    expect(effectivePower(rules, s, sw.id)).toBe(3);
+  });
+
+  it("power can be the number of other Rats on the battlefield, either side", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const pest = give(s, "p1", "pest", "battlefield");
+    s = give(pest.state, "p1", "ratling", "battlefield").state;
+    s = give(s, "p2", "ratling", "battlefield").state;
+    s = give(s, "p2", "bear", "battlefield").state; // not a Rat
+    expect(effectivePower(rules, s, pest.id)).toBe(2);
+  });
+
+  it("combat uses the computed power", () => {
+    const { s, p1Ids } = atAttackers(["swarm", "ratling", "ratToken"]);
+    const [swarm] = p1Ids as [CardId];
+    let g = passRound(ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [swarm] }));
+    g = passRound(g);
+    expect(g.players.p2?.life).toBe(17);
   });
 });
 

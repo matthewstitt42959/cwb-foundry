@@ -84,6 +84,7 @@ export function createGame(rules: Ruleset, setup: GameSetup): GameState {
     targeting: null,
     discard: null,
     rngState,
+    tokens: 0,
     over: false,
     winner: null,
     log: [],

@@ -39,6 +39,8 @@ export type Effect =
   | { kind: "damage_all"; amount: number | "x" }
   /** "You may search your library for a <subtype> card, reveal it, put it into your hand, then shuffle." */
   | { kind: "search_library"; subtype: string }
+  /** Creates `count` tokens of `tokenDefId` (a CardDef with `token: true`) under the controller's control. */
+  | { kind: "create_token"; tokenDefId: DefId; count: number; label: string }
   | { kind: "pump"; power: number; toughness: number; target: ChosenTargetSpec; duration: "until_end_of_turn" };
 
 /** A target picked when a spell is cast. */
@@ -111,6 +113,16 @@ export interface CardDef {
   types: CardType[];
   /** Lowercase subtypes from the type line after the dash ("rat", "ogre", "swamp"...). */
   subtypes?: string[];
+  /** Explicit colours, for cards with no mana cost to read them from (tokens). */
+  colors?: Color[];
+  /** A token: created by an effect rather than drawn, and it ceases to exist instead of going to the graveyard. */
+  token?: boolean;
+  /**
+   * Power isn't fixed: it equals the number of permanents with `subtype` ("yours" counts the ones
+   * its controller has, itself included; "others" counts every other one on the battlefield).
+   * `power` is then just a placeholder.
+   */
+  powerFrom?: { subtype: string; scope: "yours" | "others" };
   cost?: ManaCost;
   /** Colour of mana produced when a land is tapped. */
   produces?: Color;
@@ -228,6 +240,8 @@ export interface GameState {
   /** Set while `pending` is "discard": who must discard, and how many cards. */
   discard: { player: PlayerId; count: number } | null;
   rngState: number;
+  /** How many tokens have been created, so each gets a unique id. */
+  tokens: number;
   over: boolean;
   winner: PlayerId | null;
   log: string[];

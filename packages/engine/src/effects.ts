@@ -40,13 +40,13 @@ export function checkState(state: GameState): void {
 }
 
 /** Move a permanent from the battlefield to its owner's graveyard. */
-export function putInGraveyard(state: GameState, cardId: CardId): void {
+export function putInGraveyard(rules: Ruleset, state: GameState, cardId: CardId): void {
   for (const pid of state.order) {
     const p = state.players[pid];
     if (p?.battlefield.includes(cardId)) p.battlefield = p.battlefield.filter((id) => id !== cardId);
   }
   const inst = state.cards[cardId];
-  if (inst) state.players[inst.owner]?.graveyard.push(cardId);
+  if (inst && !rules.defs[inst.defId]?.token) state.players[inst.owner]?.graveyard.push(cardId);
 }
 
 /**
@@ -70,7 +70,7 @@ export function applyEffect(
     const t = targets[0];
     if (t?.kind === "card") {
       state.log.push(`${name(t.id)} is destroyed`);
-      putInGraveyard(state, t.id);
+      putInGraveyard(rules, state, t.id);
       queueTriggers(rules, state, t.id, "dies");
     }
     return;
@@ -87,6 +87,19 @@ export function applyEffect(
       if (p) p.life -= effect.amount;
       state.log.push(`${t.id} takes ${effect.amount} damage`);
     }
+    return;
+  }
+
+  if (effect.kind === "create_token") {
+    const def = rules.defs[effect.tokenDefId];
+    const p = state.players[controller];
+    if (!def || !p) return;
+    for (let i = 0; i < effect.count; i++) {
+      const id = `${controller}:token${state.tokens++}`;
+      state.cards[id] = { id, defId: def.id, owner: controller, tapped: false, damage: 0, enteredTurn: state.turn };
+      p.battlefield.push(id);
+    }
+    state.log.push(`${controller} creates ${effect.count === 1 ? "a" : effect.count} ${effect.label}${effect.count === 1 ? "" : "s"}`);
     return;
   }
 

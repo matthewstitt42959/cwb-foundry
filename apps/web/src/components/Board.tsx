@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   attackCandidates,
   blockCandidates,
+  effectivePower,
+  effectiveToughness,
   getLegalActions,
   legalTargets,
   targetSpecOf,
@@ -215,6 +217,8 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
         key={id}
         def={def}
         inst={inst}
+        power={effectivePower(rules, state, id)}
+        toughness={effectiveToughness(rules, state, id)}
         selected={attackSel.includes(id) || blockSel === id}
         active={active}
         targetable={asTarget}

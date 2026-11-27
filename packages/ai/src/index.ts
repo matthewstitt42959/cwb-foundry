@@ -277,6 +277,9 @@ function scoreSpell(
       case "draw":
         bonus += e.target === "self" ? 12 : -100;
         break;
+      case "create_token":
+        bonus += 8 * e.count; // bodies on the board; worth a card, less than removal
+        break;
       case "gain_life":
         bonus += e.target === "self" ? (myLife <= 10 ? 15 : 2) : -100;
         break;

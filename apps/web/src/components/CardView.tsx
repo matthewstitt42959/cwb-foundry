@@ -36,10 +36,13 @@ export interface CardViewProps {
   /** Is a valid target for the spell being aimed. */
   targetable?: boolean;
   badge?: string | undefined;
+  /** Current power/toughness on the battlefield (computed power, pumps...); falls back to the printed stats. */
+  power?: number | undefined;
+  toughness?: number | undefined;
   onClick?: (() => void) | undefined;
 }
 
-export function CardView({ def, inst, mini, selected, active, targetable, badge, onClick }: CardViewProps) {
+export function CardView({ def, inst, mini, selected, active, targetable, badge, power, toughness, onClick }: CardViewProps) {
   // Imported cards carry an image URL; fall back to the text layout if it can't load.
   const [artFailed, setArtFailed] = useState(false);
   const showArt = !mini && !!def.imageUrl && !artFailed;
@@ -58,7 +61,9 @@ export function CardView({ def, inst, mini, selected, active, targetable, badge,
     .join(" ");
 
   const damage = inst?.damage ?? 0;
-  const toughnessLeft = (def.toughness ?? 0) - damage;
+  const shownPower = power ?? def.power;
+  const shownToughness = toughness ?? def.toughness ?? 0;
+  const toughnessLeft = shownToughness - damage;
 
   return (
     <button
@@ -92,7 +97,7 @@ export function CardView({ def, inst, mini, selected, active, targetable, badge,
           {!mini && <span className="card-text">{cardText(def)}</span>}
           {isCreature && (
             <span className={`card-pt ${damage > 0 ? "hurt" : ""}`}>
-              {def.power}/{damage > 0 ? toughnessLeft : def.toughness}
+              {shownPower}/{damage > 0 ? toughnessLeft : shownToughness}
             </span>
           )}
         </>

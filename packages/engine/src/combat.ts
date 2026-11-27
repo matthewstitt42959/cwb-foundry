@@ -22,9 +22,26 @@ function hasKeyword(rules: Ruleset, state: GameState, id: CardId, kw: Keyword): 
   return !!defOf(rules, state, id)?.keywords?.includes(kw);
 }
 
-/** Power/toughness including temporary deltas from effects like "pump". */
+function countSubtype(rules: Ruleset, state: GameState, id: CardId, subtype: string, scope: "yours" | "others"): number {
+  const owner = state.cards[id]?.owner;
+  let n = 0;
+  for (const pid of state.order) {
+    if (scope === "yours" && pid !== owner) continue;
+    for (const other of state.players[pid]?.battlefield ?? []) {
+      if (scope === "others" && other === id) continue;
+      if (defOf(rules, state, other)?.subtypes?.includes(subtype)) n++;
+    }
+  }
+  return n;
+}
+
+/** Power/toughness including computed power and temporary deltas from effects like "pump". */
 export function effectivePower(rules: Ruleset, state: GameState, id: CardId): number {
-  return (defOf(rules, state, id)?.power ?? 0) + (state.cards[id]?.tempPower ?? 0);
+  const def = defOf(rules, state, id);
+  const base = def?.powerFrom
+    ? countSubtype(rules, state, id, def.powerFrom.subtype, def.powerFrom.scope)
+    : (def?.power ?? 0);
+  return base + (state.cards[id]?.tempPower ?? 0);
 }
 export function effectiveToughness(rules: Ruleset, state: GameState, id: CardId): number {
   return (defOf(rules, state, id)?.toughness ?? 0) + (state.cards[id]?.tempToughness ?? 0);
@@ -62,7 +79,10 @@ export function blockCandidates(rules: Ruleset, state: GameState): CardId[] {
   });
 }
 
-const isBlack = (rules: Ruleset, state: GameState, id: CardId) => (defOf(rules, state, id)?.cost?.B ?? 0) > 0;
+const isBlack = (rules: Ruleset, state: GameState, id: CardId) => {
+  const def = defOf(rules, state, id);
+  return def?.colors ? def.colors.includes("B") : (def?.cost?.B ?? 0) > 0;
+};
 
 export function validateAttackers(rules: Ruleset, state: GameState, attackers: CardId[]): string | null {
   const allowed = new Set(attackCandidates(rules, state));
@@ -241,7 +261,7 @@ export function destroyDeadCreatures(rules: Ruleset, state: GameState): void {
       const dead =
         inst && def?.types.includes("creature") && (inst.damage >= toughness || inst.deathtouch || toughness <= 0);
       if (dead && inst) {
-        state.players[inst.owner]?.graveyard.push(id);
+        if (!def?.token) state.players[inst.owner]?.graveyard.push(id); // tokens just cease to exist
         state.log.push(`${def?.name ?? id} dies`);
         queueTriggers(rules, state, id, "dies");
       } else {

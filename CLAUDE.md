@@ -37,10 +37,14 @@ Workspace packages ship as TypeScript source (`main: src/index.ts`); `apps/web/n
 - **State is plain JSON.** `clone()` is a JSON round trip on purpose (no `structuredClone`, so no DOM/Node typings are needed). Don't put functions, Maps or Sets in `GameState`.
 - **One source of truth for legality.** `validateAction` decides what's legal; `getLegalActions` enumerates candidates and filters through it. Add new rules in `validateAction`, not in the UI or AI.
 - **Rule packs** (`rulepacks/mtg.ts`) configure turn structure and setup. Phases carry an `onEnter` hook handled in `enterPhase` in `engine.ts`. The stack and priority are still built in, not configurable. Making reaction windows pluggable is needed before a second game.
-- **Cards are data.** `CardDef` plus declarative `Effect`s (`damage`, `draw`, `gain_life`, `destroy`). To add a mechanic: add an `Effect` variant in `types.ts`, handle it in `effects.ts` (`applyEffect`, with the `never` exhaustiveness check), then teach `cards` (`cardText`) and the importer's `parseClause` about it.
+- **Cards are data.** `CardDef` plus declarative `Effect`s (`damage`, `draw`, `gain_life`, `destroy`, `discard`, `pump`, `lose_life`, `damage_all`, `search_library`, `create_token`). To add a mechanic: add an `Effect` variant in `types.ts`, handle it in `effects.ts` (`applyEffect`, with the `never` exhaustiveness check), then teach `cards` (`cardText`) and the importer's `parseClause` about it. Effects that need a player's decision (`discard`, `search_library`) are not applied in `applyEffect`: `resolveTop` starts a pending decision via `beginChoice` instead, at every resolution site (creature enter, spell, ability).
+- **Abilities and triggers.** `CardDef.abilities` are activated (`ACTIVATE`); costs are `tap`, `mana` and `x` (optionally colour-restricted), merged into one mana payment. `CardDef.triggers` fire on `dies`, `attacks` or `upkeep`: `queueTriggers` records them, `flushTriggers` (end of every `applyAction`) puts them on the stack, pausing on a `target` decision only when there is a real choice.
+- **Tokens, subtypes, computed power.** Token defs (`token: true`) must be in `rules.defs`; the importer returns them in `ConvertResult.tokens` and `importDecklist` merges them. A token that dies is removed, not sent to the graveyard. `subtypes` come from the type line; `colors` is only for cards with no mana cost; `powerFrom` counts a subtype. Always read stats through `effectivePower` / `effectiveToughness`, never `def.power`.
 - **Combat and declarations.** Attackers and blockers are declared with `DECLARE_ATTACKERS` / `DECLARE_BLOCKERS`. While `state.pending` is set, only that declaration is legal. Combat steps are skipped when nobody can attack. During a declaration `getLegalActions` returns only the empty declaration, single choices and "all attack"; use `attackCandidates` / `blockCandidates` for arbitrary combinations.
 - **Targeting.** `any` / `creature` targets are chosen on cast and stored on the stack item. Spells fizzle if the target is gone on resolution.
-- Not implemented yet: first strike, trample, player-chosen damage order, discard to hand size, more than two players, triggered/activated abilities, counters, auras.
+- Keywords: haste, flying, vigilance, deathtouch, fear (black only; artifact creatures aren't modelled), menace, skulk, can't block, lifelink (combat damage only), first strike, trample.
+- **Reclaim / concede.** `CONCEDE` and `RECLAIM_GRAVEYARD` ignore priority. Reclaim (empty library: shuffle the graveyard back in) is a player option the human takes for either side; the AI never chooses it.
+- Not implemented yet: double strike, player-chosen damage order, discard to hand size, more than two players, counters, auras, sacrifice/discard/life costs, static abilities ("all Rats have fear"), copy effects, buyback, computed toughness, artifacts and enchantments.
 
 ## Scryfall importer (`packages/cards/src/scryfall`)
 
@@ -54,7 +58,7 @@ Workspace packages ship as TypeScript source (`main: src/index.ts`); `apps/web/n
 
 - `lib/driver.ts` runs the AI between the player's decisions (`autoplay`) and auto-passes steps where the player has nothing to do. `makeRules(extraDefs)` builds the rules for a game from starter + imported cards.
 - `GameApp` remounts `Board` on every engine step (`key={version}`). That is deliberate: UI selections (aiming, attackers, blockers) live in `Board` state and must never outlive the engine state they refer to. Don't "optimize" it away with an effect that resets state; that caused a one-frame stale render.
-- Everything runs client-side. Imported-card conversions are cached in `localStorage` (`cwb:scryfall-cache:v1`).
+- Everything runs client-side. Imported-card conversions are cached in `localStorage` (`cwb:scryfall-cache:v3`; bump it whenever the importer learns something new, or stale "unsupported" results stick around).
 
 ## AI (`packages/ai`)
 
