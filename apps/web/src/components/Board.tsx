@@ -343,6 +343,11 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
                   Let opponent reclaim graveyard ({opp.graveyard.length} cards)
                 </button>
               )}
+              {!state.over && opp && opp.library.length === 0 && (
+                <button type="button" className="btn" onClick={() => act({ type: "CONCEDE", player: BOT })}>
+                  End game
+                </button>
+              )}
               {!aiming && !state.pending && myDecision && me && me.library.length === 0 && me.graveyard.length > 0 && (
                 <button
                   type="button"
