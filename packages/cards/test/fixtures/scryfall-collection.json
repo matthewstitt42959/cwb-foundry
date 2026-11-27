@@ -945,6 +945,33 @@
     "crop": "https://cards.scryfall.io/crop/front/4/9/49125cfc-dbae-4543-9d2d-4cc78f45ce9a.webp?1783946074",
     "jpeg": "https://cards.scryfall.io/normal/front/4/9/49125cfc-dbae-4543-9d2d-4cc78f45ce9a.jpg?1783946074"
    }
+  },
+  {
+   "object": "card",
+   "id": "96916db2-5121-4ff1-880c-369744f11ecf",
+   "oracle_id": "104095ed-55e3-408e-bf70-4fe06bb16d2f",
+   "name": "Crypt Rats",
+   "layout": "normal",
+   "mana_cost": "{2}{B}",
+   "type_line": "Creature \u2014 Rat",
+   "oracle_text": "{X}: This creature deals X damage to each creature and each player. Spend only black mana on X.",
+   "power": "1",
+   "toughness": "1",
+   "keywords": [],
+   "image_uris": {
+    "small": "https://cards.scryfall.io/small/front/9/6/96916db2-5121-4ff1-880c-369744f11ecf.jpg?1783933130",
+    "normal": "https://cards.scryfall.io/normal/front/9/6/96916db2-5121-4ff1-880c-369744f11ecf.jpg?1783933130",
+    "large": "https://cards.scryfall.io/large/front/9/6/96916db2-5121-4ff1-880c-369744f11ecf.jpg?1783933130",
+    "png": "https://cards.scryfall.io/png/front/9/6/96916db2-5121-4ff1-880c-369744f11ecf.png?1783933130",
+    "art_crop": "https://cards.scryfall.io/art_crop/front/9/6/96916db2-5121-4ff1-880c-369744f11ecf.jpg?1783933130",
+    "border_crop": "https://cards.scryfall.io/border_crop/front/9/6/96916db2-5121-4ff1-880c-369744f11ecf.jpg?1783933130",
+    "thumb": "https://cards.scryfall.io/thumb/front/9/6/96916db2-5121-4ff1-880c-369744f11ecf.webp?1783933130",
+    "grid": "https://cards.scryfall.io/grid/front/9/6/96916db2-5121-4ff1-880c-369744f11ecf.webp?1783933130",
+    "display": "https://cards.scryfall.io/display/front/9/6/96916db2-5121-4ff1-880c-369744f11ecf.webp?1783933130",
+    "art": "https://cards.scryfall.io/art/front/9/6/96916db2-5121-4ff1-880c-369744f11ecf.webp?1783933130",
+    "crop": "https://cards.scryfall.io/crop/front/9/6/96916db2-5121-4ff1-880c-369744f11ecf.webp?1783933130",
+    "jpeg": "https://cards.scryfall.io/normal/front/9/6/96916db2-5121-4ff1-880c-369744f11ecf.jpg?1783933130"
+   }
   }
  ]
 }

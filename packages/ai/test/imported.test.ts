@@ -34,13 +34,13 @@ const rats = deck({
   mtg_swamp: 16,
   mtg_typhoid_rats: 3,
   mtg_rabid_rats: 3,
-  mtg_burglar_rat: 2,
+  mtg_burglar_rat: 1,
+  mtg_crypt_rats: 3,
   mtg_elephant_rat: 3,
   mtg_razortooth_rats: 2,
   mtg_rancid_rats: 2,
   mtg_nezumi_cutthroat: 2,
   mtg_engine_rat: 2,
-  mtg_child_of_night: 2,
   mtg_disease_carriers: 3,
 });
 
@@ -73,6 +73,7 @@ describe("imported cards run in the real engine", () => {
     expect(rats).toHaveLength(40);
     for (const id of rats) expect(defs[id], id).toBeDefined();
     let triggers = 0;
+    let sweeps = 0;
     for (let seed = 1; seed <= 30; seed++) {
       let state = createGame(rules, { decks: { p1: rats, p2: rats }, seed });
       for (let i = 0; i < 6000 && !state.over; i++) {
@@ -83,7 +84,9 @@ describe("imported cards run in the real engine", () => {
       }
       expect(state.over, `seed ${seed} didn't finish`).toBe(true);
       triggers += state.log.filter((l) => l.endsWith("'s ability triggers")).length;
+      sweeps += state.log.filter((l) => l.endsWith("damage is dealt to each creature and each player")).length;
     }
     expect(triggers).toBeGreaterThan(0);
+    expect(sweeps).toBeGreaterThan(0); // the AI does use Crypt Rats
   });
 });

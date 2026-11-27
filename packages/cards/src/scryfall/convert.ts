@@ -31,6 +31,8 @@ const SUPPORTED_KEYWORDS: Record<string, Keyword> = {
 const BASIC_COLORS = ["W", "U", "B", "R", "G"] as const;
 type BasicColor = (typeof BASIC_COLORS)[number];
 
+const COLOR_OF: Record<string, BasicColor> = { white: "W", blue: "U", black: "B", red: "R", green: "G" };
+
 const SUPERTYPES = new Set(["basic", "legendary", "snow", "world", "ongoing"]);
 
 const NUMBER_WORDS: Record<string, number> = {
@@ -88,6 +90,9 @@ function parseClause(clause: string): Effect | null {
     const n = parseCount(m[1] ?? "");
     return n ? { kind: "lose_life", amount: n, target: "opponent" } : null;
   }
+  if ((m = clause.match(/^~ deals (\d+|x) damage to each creature and each player$/))) {
+    return { kind: "damage_all", amount: m[1] === "x" ? "x" : Number(m[1]) };
+  }
   if (clause === "destroy target creature") return { kind: "destroy", target: "creature" };
   if ((m = clause.match(/^you gain (\w+) life$/))) {
     const n = parseCount(m[1] ?? "");
@@ -120,12 +125,18 @@ function parseClause(clause: string): Effect | null {
  * X, hybrid mana...) makes the whole line unsupported.
  */
 function parseActivatedAbility(normalizedLine: string): Ability | null {
-  const m = normalizedLine.match(/^([^:]+):\s*(.+?)\.?$/);
+  // "Spend only black mana on X." restricts the colour of an {X} cost.
+  const restriction = normalizedLine.match(/\s*Spend only (white|blue|black|red|green) mana on X\.?$/i);
+  const only = restriction ? COLOR_OF[(restriction[1] ?? "").toLowerCase()] : undefined;
+  const line = restriction ? normalizedLine.slice(0, restriction.index).trim() : normalizedLine;
+  const m = line.match(/^([^:]+):\s*(.+?)\.?$/);
   if (!m) return null;
   const cost: Cost[] = [];
   for (const part of (m[1] ?? "").split(/,\s*/)) {
     if (/^\{t\}$/i.test(part)) {
       cost.push({ kind: "tap" });
+    } else if (/^\{x\}$/i.test(part)) {
+      cost.push(only ? { kind: "x", only } : { kind: "x" });
     } else if (/^(\{[^}]+\})+$/.test(part)) {
       const { cost: mana, problems } = parseManaCost(part);
       if (problems.length > 0) return null;
@@ -135,7 +146,12 @@ function parseActivatedAbility(normalizedLine: string): Ability | null {
     }
   }
   const effect = parseClause((m[2] ?? "").trim().toLowerCase());
-  return effect ? { cost, effect } : null;
+  if (!effect) return null;
+  // X in the cost and X in the effect must go together, or the card would run differently.
+  const hasX = cost.some((c) => c.kind === "x");
+  if (hasX !== (effect.kind === "damage_all" && effect.amount === "x")) return null;
+  if (restriction && !hasX) return null;
+  return { cost, effect };
 }
 
 function escapeRegExp(s: string): string {

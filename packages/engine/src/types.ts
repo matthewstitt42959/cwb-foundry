@@ -35,6 +35,8 @@ export type Effect =
   | { kind: "destroy"; target: "creature" }
   | { kind: "discard"; amount: number; target: PlayerTargetSpec }
   | { kind: "lose_life"; amount: number; target: PlayerTargetSpec }
+  /** Damage to every creature and every player (the controller's side included). "x" reads the ability's X. */
+  | { kind: "damage_all"; amount: number | "x" }
   | { kind: "pump"; power: number; toughness: number; target: ChosenTargetSpec; duration: "until_end_of_turn" };
 
 /** A target picked when a spell is cast. */
@@ -47,7 +49,11 @@ export type CardType = "land" | "creature" | "instant" | "sorcery";
  * (sacrifice, discard, life) slot in here later without touching anything that
  * already works. `Ability.cost` is an array since real costs combine several.
  */
-export type Cost = { kind: "tap" } | { kind: "mana"; cost: ManaCost };
+export type Cost =
+  | { kind: "tap" }
+  | { kind: "mana"; cost: ManaCost }
+  /** Pay X mana, chosen on activation; `only` restricts it to one colour ("spend only black mana on X"). */
+  | { kind: "x"; only?: Color };
 
 export interface Ability {
   cost: Cost[];
@@ -190,7 +196,7 @@ export interface CombatState {
  */
 export type StackItem =
   | { kind: "spell"; cardId: CardId; controller: PlayerId; targets: Target[] }
-  | { kind: "ability"; sourceId: CardId; controller: PlayerId; effect: Effect; targets: Target[] };
+  | { kind: "ability"; sourceId: CardId; controller: PlayerId; effect: Effect; targets: Target[]; x?: number };
 
 export interface GameState {
   packId: string;
@@ -227,7 +233,7 @@ export type Action =
   | { type: "DECLARE_ATTACKERS"; player: PlayerId; attackers: CardId[] }
   | { type: "DECLARE_BLOCKERS"; player: PlayerId; blocks: BlockAssignment[] }
   | { type: "DISCARD"; player: PlayerId; cardIds: CardId[] }
-  | { type: "ACTIVATE"; player: PlayerId; cardId: CardId; abilityIndex: number; targets?: Target[] }
+  | { type: "ACTIVATE"; player: PlayerId; cardId: CardId; abilityIndex: number; targets?: Target[]; x?: number }
   | { type: "CHOOSE_TARGET"; player: PlayerId; target: Target }
   | { type: "CONCEDE"; player: PlayerId }
   | { type: "RECLAIM_GRAVEYARD"; player: PlayerId };

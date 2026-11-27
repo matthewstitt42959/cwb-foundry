@@ -178,7 +178,7 @@ function decideMain(rules: Ruleset, state: GameState, me: PlayerId, legal: Actio
     const inst = state.cards[a.cardId];
     const ability = rules.defs[inst?.defId ?? ""]?.abilities?.[a.abilityIndex];
     if (!ability) continue;
-    const score = scoreAbility(rules, state, me, ability.effect, a.targets?.[0]);
+    const score = scoreAbility(rules, state, me, ability.effect, a.targets?.[0], a.x);
     if (score > 0 && (!bestActivation || score > bestActivation.score)) bestActivation = { action: a, score };
   }
   if (bestActivation) return bestActivation.action;
@@ -277,7 +277,33 @@ function scoreSpell(
  * using if it's lethal on its own (e.g. Rabid Rats' -1/-1 finishing off a blocker), and
  * "lose life" for the opponent when it's lethal. Anything else scores 0.
  */
-function scoreAbility(rules: Ruleset, state: GameState, me: PlayerId, effect: Effect, target?: Target): number {
+function scoreAbility(
+  rules: Ruleset,
+  state: GameState,
+  me: PlayerId,
+  effect: Effect,
+  target?: Target,
+  x = 0,
+): number {
+  if (effect.kind === "damage_all") {
+    const amount = effect.amount === "x" ? x : effect.amount;
+    if (amount <= 0) return 0;
+    const opp = opponentOf(state, me);
+    const myLife = state.players[me]?.life ?? 20;
+    const oppLife = state.players[opp]?.life ?? 20;
+    if (myLife <= amount) return -1; // never kill ourselves
+    if (oppLife <= amount) return 1000; // lethal
+    // Otherwise only if the creatures we'd take out are worth more than the ones we'd lose.
+    let net = 0;
+    for (const pid of state.order) {
+      for (const id of state.players[pid]?.battlefield ?? []) {
+        if (!defOf(rules, state, id)?.types.includes("creature")) continue;
+        if (toughnessLeft(rules, state, id) > amount) continue;
+        net += pid === me ? -value(rules, state, id) : value(rules, state, id);
+      }
+    }
+    return net > 10 ? net : 0;
+  }
   if (effect.kind === "lose_life") {
     // Only worth interrupting everything else when it's lethal; otherwise decideMain spends spare mana on it.
     return effect.target === "opponent" && effect.amount >= (state.players[opponentOf(state, me)]?.life ?? 20) ? 1000 : 0;

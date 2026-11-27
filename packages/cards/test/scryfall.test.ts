@@ -113,6 +113,12 @@ describe("convertScryfallCard: supported cards", () => {
     expect(convert("Charging Badger").def?.keywords).toEqual(["trample"]);
   });
 
+  it("converts an X ability restricted to one colour, with damage to everything", () => {
+    expect(convert("Crypt Rats").def?.abilities).toEqual([
+      { cost: [{ kind: "x", only: "B" }], effect: { kind: "damage_all", amount: "x" } },
+    ]);
+  });
+
   it("converts a dies trigger", () => {
     expect(convert("Disease Carriers").def?.triggers).toEqual([
       { on: "dies", effect: { kind: "pump", power: -2, toughness: -2, target: "creature", duration: "until_end_of_turn" } },

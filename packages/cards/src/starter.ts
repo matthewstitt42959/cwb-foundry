@@ -172,6 +172,8 @@ function effectText(e: Effect): string {
       return `${cap(who(e.target))} gain${e.target === "self" ? "" : "s"} ${e.amount} life.`;
     case "destroy":
       return "Destroy target creature.";
+    case "damage_all":
+      return `Deal ${e.amount === "x" ? "X" : e.amount} damage to each creature and each player.`;
     case "lose_life":
       return `${cap(who(e.target))} lose${e.target === "self" ? "" : "s"} ${e.amount} life.`;
     case "discard":
@@ -192,6 +194,7 @@ function costText(costs: Cost[]): string {
   return costs
     .map((c) => {
       if (c.kind === "tap") return "{T}";
+      if (c.kind === "x") return c.only ? `{X} (only {${c.only}})` : "{X}";
       const generic = c.cost.generic ? `{${c.cost.generic}}` : "";
       return generic + (["W", "U", "B", "R", "G"] as const).map((k) => `{${k}}`.repeat(c.cost[k] ?? 0)).join("");
     })

@@ -350,6 +350,61 @@ describe("abilities with mana costs", () => {
   });
 });
 
+describe("X costs and damage to everything", () => {
+  function withSweeper(mountains: number, forests = 0) {
+    let s = passUntilPhase(newGame(), "main1");
+    const sw = give(s, "p1", "sweeper", "battlefield");
+    s = sw.state;
+    for (let i = 0; i < mountains; i++) s = give(s, "p1", "mountain", "battlefield").state;
+    for (let i = 0; i < forests; i++) s = give(s, "p1", "forest", "battlefield").state;
+    const bear = give(s, "p2", "bear", "battlefield");
+    const giant = give(bear.state, "p2", "giant", "battlefield");
+    return { s: giant.state, sweeper: sw.id, bear: bear.id, giant: giant.id };
+  }
+
+  it("offers each affordable X, and paying it taps that many lands", () => {
+    const { s, sweeper } = withSweeper(3);
+    const xs = getLegalActions(rules, s).flatMap((a) => (a.type === "ACTIVATE" ? [a.x] : []));
+    expect(xs).toEqual([1, 2, 3]);
+    const g = ok(s, { type: "ACTIVATE", player: "p1", cardId: sweeper, abilityIndex: 0, x: 2 });
+    expect(g.players.p1?.battlefield.filter((id) => g.cards[id]?.tapped)).toHaveLength(2);
+    expect(g.stack[0]).toMatchObject({ kind: "ability", x: 2 });
+  });
+
+  it("deals X to every creature and every player, including its own side", () => {
+    const { s, sweeper, bear, giant } = withSweeper(2);
+    let g = ok(s, { type: "ACTIVATE", player: "p1", cardId: sweeper, abilityIndex: 0, x: 2 });
+    g = ok(ok(g, { type: "PASS", player: "p1" }), { type: "PASS", player: "p2" });
+    expect(g.players.p1?.life).toBe(18);
+    expect(g.players.p2?.life).toBe(18);
+    expect(g.players.p2?.graveyard).toContain(bear); // 2/2 dies
+    expect(g.players.p2?.battlefield).toContain(giant); // 4/4 survives with 2 damage
+    expect(g.cards[giant]?.damage).toBe(2);
+    expect(g.players.p1?.graveyard).toContain(sweeper); // the source is a creature too
+  });
+
+  it("only the allowed colour can pay X", () => {
+    const { s } = withSweeper(0, 3); // forests only; X must be red
+    expect(getLegalActions(rules, s).some((a) => a.type === "ACTIVATE")).toBe(false);
+  });
+
+  it("requires X for an X ability and rejects X for any other", () => {
+    const { s, sweeper } = withSweeper(2);
+    expect(validateAction(rules, s, { type: "ACTIVATE", player: "p1", cardId: sweeper, abilityIndex: 0 })).toBe(
+      "Choose a value for X",
+    );
+    expect(validateAction(rules, s, { type: "ACTIVATE", player: "p1", cardId: sweeper, abilityIndex: 0, x: 5 })).toBe(
+      "Cannot pay the cost",
+    );
+    let t = passUntilPhase(newGame(), "main1");
+    const pinger = give(t, "p1", "pinger", "battlefield");
+    t = give(pinger.state, "p1", "mountain", "battlefield").state;
+    expect(validateAction(rules, t, { type: "ACTIVATE", player: "p1", cardId: pinger.id, abilityIndex: 0, x: 1 })).toBe(
+      "This ability has no X",
+    );
+  });
+});
+
 describe("triggered abilities", () => {
   /** p1's attacker is blocked by each listed p2 creature in turn; returns the state at combat damage. */
   function combat(attacker: string, blockers: string[]) {

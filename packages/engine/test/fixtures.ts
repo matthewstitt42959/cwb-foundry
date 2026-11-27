@@ -163,6 +163,15 @@ export const defs: CardDefs = {
     toughness: 2,
     triggers: [{ on: "attacks", effect: { kind: "lose_life", amount: 1, target: "opponent" } }],
   },
+  sweeper: {
+    id: "sweeper",
+    game: "test",
+    name: "Test Sweeper",
+    types: ["creature"],
+    power: 1,
+    toughness: 1,
+    abilities: [{ cost: [{ kind: "x", only: "R" }], effect: { kind: "damage_all", amount: "x" } }],
+  },
   imp: {
     id: "imp",
     game: "test",

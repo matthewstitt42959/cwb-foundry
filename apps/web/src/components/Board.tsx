@@ -35,6 +35,7 @@ const label = (id: PlayerId) => (id === HUMAN ? "You" : "Opponent");
 export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAction, onNewGame }: BoardProps) {
   const [notice, setNotice] = useState<string>("");
   const [aiming, setAiming] = useState<CardId | null>(null); // spell waiting for a target
+  const [xChoice, setXChoice] = useState<Extract<Action, { type: "ACTIVATE" }>[] | null>(null); // affordable X values for an ability
   const [activating, setActivating] = useState<{ cardId: CardId; abilityIndex: number } | null>(null); // ability waiting for a target
   const [attackSel, setAttackSel] = useState<CardId[]>([]);
   const [blocks, setBlocks] = useState<BlockAssignment[]>([]);
@@ -52,6 +53,7 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
       if (e.key === "Escape") {
         setAiming(null);
         setActivating(null);
+        setXChoice(null);
         setBlockSel(null);
       }
     };
@@ -114,6 +116,10 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
     const options = activations.filter((a) => a.cardId === id);
     const first = options[0];
     if (!first) return setNotice("That permanent has no ability you can use right now");
+    if (first.x !== undefined && !first.targets) {
+      setNotice("");
+      return setXChoice(options.filter((a) => a.abilityIndex === first.abilityIndex));
+    }
     if (!first.targets) return act(first);
     setNotice("");
     setActivating({ cardId: id, abilityIndex: first.abilityIndex });
@@ -342,6 +348,19 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
                 <span>
                   Choose a target for {defOf(state.targeting?.sourceId ?? "")?.name}&apos;s triggered ability
                 </span>
+              )}
+              {xChoice && (
+                <>
+                  <span>Choose X for {defOf(xChoice[0]?.cardId ?? "")?.name}:</span>
+                  {xChoice.map((a) => (
+                    <button key={a.x} type="button" className="btn" onClick={() => act(a)}>
+                      {a.x}
+                    </button>
+                  ))}
+                  <button type="button" className="btn" onClick={() => setXChoice(null)}>
+                    Cancel
+                  </button>
+                </>
               )}
               {activating && (
                 <>

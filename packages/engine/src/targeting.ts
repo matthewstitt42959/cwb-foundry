@@ -2,6 +2,7 @@ import type { CardDef, CardId, ChosenTargetSpec, Effect, GameState, Ruleset, Tar
 
 /** Which kind of chosen target (if any) a single effect needs. */
 export function targetSpecOfEffect(e: Effect): ChosenTargetSpec | null {
+  if (e.kind === "damage_all") return null;
   if (e.target === "creature" || e.target === "blocking_creature" || e.target === "any") return e.target;
   return null;
 }

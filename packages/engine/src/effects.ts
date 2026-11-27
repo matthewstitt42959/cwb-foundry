@@ -59,6 +59,7 @@ export function applyEffect(
   effect: Effect,
   controller: PlayerId,
   targets: Target[],
+  x = 0,
 ): void {
   const name = (id: CardId) => {
     const inst = state.cards[id];
@@ -85,6 +86,23 @@ export function applyEffect(
       const p = state.players[t.id];
       if (p) p.life -= effect.amount;
       state.log.push(`${t.id} takes ${effect.amount} damage`);
+    }
+    return;
+  }
+
+  if (effect.kind === "damage_all") {
+    const amount = effect.amount === "x" ? x : effect.amount;
+    if (amount > 0) {
+      for (const pid of state.order) {
+        const p = state.players[pid];
+        if (!p) continue;
+        for (const id of p.battlefield) {
+          const inst = state.cards[id];
+          if (inst && rules.defs[inst.defId]?.types.includes("creature")) inst.damage += amount;
+        }
+        p.life -= amount;
+      }
+      state.log.push(`${amount} damage is dealt to each creature and each player`);
     }
     return;
   }
