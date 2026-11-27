@@ -1,6 +1,7 @@
 import {
   applyAction,
   getLegalActions,
+  validateAction,
   mtgPack,
   type CardDefs,
   type GameState,
@@ -44,7 +45,10 @@ export function autoplay(rules: Ruleset, state: GameState, opts: DriverOptions):
     const phase = rules.pack.phases[s.phaseIndex];
     // An empty library with a graveyard to reclaim is a real choice: never skip past it,
     // or the human is auto-passed straight into the draw that loses the game.
-    const canReclaim = legal.some((a) => a.type === "RECLAIM_GRAVEYARD");
+    // The same goes for the opponent: the human decides whether the AI gets its graveyard back.
+    const canReclaim =
+      legal.some((a) => a.type === "RECLAIM_GRAVEYARD") ||
+      validateAction(rules, s, { type: "RECLAIM_GRAVEYARD", player: BOT }) === null;
     const quiet =
       !opts.stopEverywhere &&
       !canReclaim &&

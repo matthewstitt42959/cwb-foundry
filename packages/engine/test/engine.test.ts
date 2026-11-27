@@ -211,6 +211,18 @@ describe("reclaiming a graveyard", () => {
     expect(validateAction(rules, s, { type: "RECLAIM_GRAVEYARD", player: "p1" })).toMatch(/graveyard is empty/);
   });
 
+  it("can be done for a player who doesn't hold priority", () => {
+    const s0 = withEmptyLibrary(4);
+    expect(s0.priority).toBe("p1");
+    const empty = clone(s0);
+    const p2 = empty.players.p2 as { library: string[]; graveyard: string[] };
+    p2.graveyard = p2.library.slice(0, 3);
+    p2.library = [];
+    const s = ok(empty, { type: "RECLAIM_GRAVEYARD", player: "p2" });
+    expect(s.players.p2?.library).toHaveLength(3);
+    expect(s.priority).toBe("p1");
+  });
+
   it("is offered by getLegalActions once the library is empty", () => {
     const s = withEmptyLibrary(3);
     expect(getLegalActions(rules, s)).toContainEqual({ type: "RECLAIM_GRAVEYARD", player: "p1" });

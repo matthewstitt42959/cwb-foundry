@@ -334,6 +334,15 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
                 </>
               )}
               {!aiming && state.pending === "discard" && myDecision && <span>Choose a card from your hand to discard</span>}
+              {!state.over && opp && opp.library.length === 0 && opp.graveyard.length > 0 && (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => act({ type: "RECLAIM_GRAVEYARD", player: BOT })}
+                >
+                  Let opponent reclaim graveyard ({opp.graveyard.length} cards)
+                </button>
+              )}
               {!aiming && !state.pending && myDecision && me && me.library.length === 0 && me.graveyard.length > 0 && (
                 <button
                   type="button"

@@ -289,6 +289,16 @@ export function validateAction(rules: Ruleset, state: GameState, action: Action)
   // A player may concede at any time, regardless of priority or a pending declaration.
   if (action.type === "CONCEDE") return state.players[action.player] ? null : "Unknown player";
 
+  // Reclaiming is likewise priority-free: the human decides it for either side, so it
+  // can name a player who doesn't currently hold priority.
+  if (action.type === "RECLAIM_GRAVEYARD") {
+    const p = state.players[action.player];
+    if (!p) return "Unknown player";
+    if (p.library.length > 0) return "That library isn't empty";
+    if (p.graveyard.length === 0) return "That graveyard is empty too";
+    return null;
+  }
+
   // While a declaration or discard is pending, only that action is legal.
   if (state.pending) {
     if (action.player !== pendingActor(state)) return "Waiting for the other player to declare";
@@ -313,12 +323,6 @@ export function validateAction(rules: Ruleset, state: GameState, action: Action)
   const me = state.players[action.player];
   if (!me) return "Unknown player";
   if (action.type === "PASS") return null;
-
-  if (action.type === "RECLAIM_GRAVEYARD") {
-    if (me.library.length > 0) return "Your library isn't empty";
-    if (me.graveyard.length === 0) return "Your graveyard is empty too";
-    return null;
-  }
 
   if (action.type === "ACTIVATE") {
     if (!me.battlefield.includes(action.cardId)) return "You don't control that permanent";
@@ -531,7 +535,6 @@ export function applyAction(rules: Ruleset, state: GameState, action: Action): A
       next.rngState = shuffled.state;
       me.library = shuffled.items;
       me.graveyard = [];
-      next.passes = 0;
       next.log.push(`${action.player} shuffles their graveyard back into their library`);
       break;
     }
