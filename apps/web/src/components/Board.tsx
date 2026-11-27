@@ -34,6 +34,7 @@ const label = (id: PlayerId) => (id === HUMAN ? "You" : "Opponent");
 export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAction, onNewGame }: BoardProps) {
   const [notice, setNotice] = useState<string>("");
   const [aiming, setAiming] = useState<CardId | null>(null); // spell waiting for a target
+  const [activating, setActivating] = useState<{ cardId: CardId; abilityIndex: number } | null>(null); // ability waiting for a target
   const [attackSel, setAttackSel] = useState<CardId[]>([]);
   const [blocks, setBlocks] = useState<BlockAssignment[]>([]);
   const [blockSel, setBlockSel] = useState<CardId | null>(null);
@@ -49,6 +50,7 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setAiming(null);
+        setActivating(null);
         setBlockSel(null);
       }
     };
@@ -78,15 +80,37 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
   };
 
   const aimingDef = aiming ? defOf(aiming) : undefined;
-  const targets: Target[] = useMemo(
-    () => (aimingDef ? legalTargets(rules, state, aimingDef) : []),
-    [aimingDef, state],
+  const picking = aiming !== null || activating !== null; // choosing a target for a spell or ability
+  const activations = useMemo(
+    () => legal.filter((a): a is Extract<Action, { type: "ACTIVATE" }> => a.type === "ACTIVATE"),
+    [legal],
   );
+  const targets: Target[] = useMemo(() => {
+    if (aimingDef) return legalTargets(rules, state, aimingDef);
+    if (activating) {
+      return activations
+        .filter((a) => a.cardId === activating.cardId && a.abilityIndex === activating.abilityIndex)
+        .flatMap((a) => a.targets ?? []);
+    }
+    return [];
+  }, [aimingDef, activating, activations, state]);
   const isTarget = (t: Target) => targets.some((x) => x.kind === t.kind && x.id === t.id);
 
   const pickTarget = (t: Target) => {
-    if (!aiming || !isTarget(t)) return;
-    act({ type: "CAST", player: HUMAN, cardId: aiming, targets: [t] });
+    if (!isTarget(t)) return;
+    if (aiming) act({ type: "CAST", player: HUMAN, cardId: aiming, targets: [t] });
+    else if (activating) {
+      act({ type: "ACTIVATE", player: HUMAN, cardId: activating.cardId, abilityIndex: activating.abilityIndex, targets: [t] });
+    }
+  };
+
+  const activate = (id: CardId) => {
+    const options = activations.filter((a) => a.cardId === id);
+    const first = options[0];
+    if (!first) return setNotice("That permanent has no ability you can use right now");
+    if (!first.targets) return act(first);
+    setNotice("");
+    setActivating({ cardId: id, abilityIndex: first.abilityIndex });
   };
 
   // ---- hand -----------------------------------------------------------
@@ -124,17 +148,19 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
   const incoming = state.combat?.attackers ?? [];
 
   const clickMyCreature = (id: CardId) => {
-    if (aiming) return pickTarget({ kind: "card", id });
+    if (picking) return pickTarget({ kind: "card", id });
     if (attackers.includes(id)) {
       setAttackSel((sel) => (sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]));
     } else if (blockers.includes(id)) {
       if (blocks.some((b) => b.blocker === id)) setBlocks((bs) => bs.filter((b) => b.blocker !== id));
       else setBlockSel(blockSel === id ? null : id);
+    } else if (myDecision && !state.pending) {
+      activate(id);
     }
   };
 
   const clickTheirCreature = (id: CardId) => {
-    if (aiming) return pickTarget({ kind: "card", id });
+    if (picking) return pickTarget({ kind: "card", id });
     if (blockSel && incoming.includes(id)) {
       const next = [...blocks, { blocker: blockSel, attacker: id }];
       const err = validateAction(rules, state, { type: "DECLARE_BLOCKERS", player: HUMAN, blocks: next });
@@ -165,9 +191,11 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
     const def = defOf(id);
     const inst = state.cards[id];
     if (!def) return null;
-    const asTarget = aiming ? isTarget({ kind: "card", id }) : false;
+    const asTarget = picking ? isTarget({ kind: "card", id }) : false;
+    const canActivate = mine && !picking && !state.pending && activations.some((a) => a.cardId === id);
     const active =
       asTarget ||
+      canActivate ||
       (mine && (attackers.includes(id) || (blockers.includes(id) && !blocks.some((b) => b.blocker === id)))) ||
       (!mine && !!blockSel && incoming.includes(id));
     return (
@@ -182,7 +210,7 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
         onClick={
           mine
             ? () => clickMyCreature(id)
-            : aiming || blockSel
+            : picking || blockSel
               ? () => clickTheirCreature(id)
               : undefined
         }
@@ -199,7 +227,7 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
   const playerBar = (pid: PlayerId) => {
     const p = state.players[pid];
     if (!p) return null;
-    const targetable = aiming ? isTarget({ kind: "player", id: pid }) : false;
+    const targetable = picking ? isTarget({ kind: "player", id: pid }) : false;
     return (
       <button
         type="button"
@@ -304,7 +332,15 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
                   </button>
                 </>
               )}
-              {!aiming && state.pending === "attackers" && myDecision && (
+              {activating && (
+                <>
+                  <span>Choose a target for {defOf(activating.cardId)?.name}'s ability</span>
+                  <button type="button" className="btn" onClick={() => setActivating(null)}>
+                    Cancel
+                  </button>
+                </>
+              )}
+              {!picking && state.pending === "attackers" && myDecision && (
                 <>
                   <span>Declare attackers: click your creatures</span>
                   <button
@@ -321,7 +357,7 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
                   )}
                 </>
               )}
-              {!aiming && state.pending === "blockers" && myDecision && (
+              {!picking && state.pending === "blockers" && myDecision && (
                 <>
                   <span>Declare blockers: click your creature, then an attacker</span>
                   <button
@@ -333,7 +369,7 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
                   </button>
                 </>
               )}
-              {!aiming && state.pending === "discard" && myDecision && <span>Choose a card from your hand to discard</span>}
+              {!picking && state.pending === "discard" && myDecision && <span>Choose a card from your hand to discard</span>}
               {!state.over && opp && opp.library.length === 0 && opp.graveyard.length > 0 && (
                 <button
                   type="button"
@@ -348,7 +384,7 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
                   End game
                 </button>
               )}
-              {!aiming && !state.pending && myDecision && me && me.library.length === 0 && me.graveyard.length > 0 && (
+              {!picking && !state.pending && myDecision && me && me.library.length === 0 && me.graveyard.length > 0 && (
                 <button
                   type="button"
                   className="btn"
@@ -357,7 +393,7 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
                   Reclaim graveyard ({me.graveyard.length} cards back to your library)
                 </button>
               )}
-              {!aiming && !state.pending && myDecision && (
+              {!picking && !state.pending && myDecision && (
                 <button
                   type="button"
                   className="btn primary"

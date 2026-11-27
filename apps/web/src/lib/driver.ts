@@ -49,9 +49,13 @@ export function autoplay(rules: Ruleset, state: GameState, opts: DriverOptions):
     const canReclaim =
       legal.some((a) => a.type === "RECLAIM_GRAVEYARD") ||
       validateAction(rules, s, { type: "RECLAIM_GRAVEYARD", player: BOT }) === null;
+    // A targeted ability only has legal targets at moments that matter (e.g. Rabid Rats once
+    // blockers are declared), so don't skip those steps.
+    const canUseAbility = legal.some((a) => a.type === "ACTIVATE" && a.targets !== undefined);
     const quiet =
       !opts.stopEverywhere &&
       !canReclaim &&
+      !canUseAbility &&
       !s.pending &&
       s.stack.length === 0 &&
       !(s.activePlayer === HUMAN && phase?.main);
