@@ -34,11 +34,11 @@ const rats = deck({
   mtg_swamp: 16,
   mtg_typhoid_rats: 3,
   mtg_rabid_rats: 3,
-  mtg_burglar_rat: 1,
   mtg_crypt_rats: 3,
+  mtg_ratcatcher: 2,
   mtg_elephant_rat: 3,
   mtg_razortooth_rats: 2,
-  mtg_rancid_rats: 2,
+  mtg_rancid_rats: 1,
   mtg_nezumi_cutthroat: 2,
   mtg_engine_rat: 2,
   mtg_disease_carriers: 3,
@@ -74,6 +74,7 @@ describe("imported cards run in the real engine", () => {
     for (const id of rats) expect(defs[id], id).toBeDefined();
     let triggers = 0;
     let sweeps = 0;
+    let searches = 0;
     for (let seed = 1; seed <= 30; seed++) {
       let state = createGame(rules, { decks: { p1: rats, p2: rats }, seed });
       for (let i = 0; i < 6000 && !state.over; i++) {
@@ -84,9 +85,11 @@ describe("imported cards run in the real engine", () => {
       }
       expect(state.over, `seed ${seed} didn't finish`).toBe(true);
       triggers += state.log.filter((l) => l.endsWith("'s ability triggers")).length;
+      searches += state.log.filter((l) => l.includes("puts it into their hand, and shuffles")).length;
       sweeps += state.log.filter((l) => l.endsWith("damage is dealt to each creature and each player")).length;
     }
     expect(triggers).toBeGreaterThan(0);
     expect(sweeps).toBeGreaterThan(0); // the AI does use Crypt Rats
+    expect(searches).toBeGreaterThan(0); // and Ratcatcher finds Rats
   });
 });

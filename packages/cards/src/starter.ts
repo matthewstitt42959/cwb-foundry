@@ -172,6 +172,8 @@ function effectText(e: Effect): string {
       return `${cap(who(e.target))} gain${e.target === "self" ? "" : "s"} ${e.amount} life.`;
     case "destroy":
       return "Destroy target creature.";
+    case "search_library":
+      return `Search your library for a ${cap(e.subtype)} card, reveal it, put it into your hand, then shuffle.`;
     case "damage_all":
       return `Deal ${e.amount === "x" ? "X" : e.amount} damage to each creature and each player.`;
     case "lose_life":
@@ -207,7 +209,13 @@ export function cardText(def: CardDef): string {
   for (const e of def.effects ?? []) parts.push(effectText(e));
   for (const a of def.abilities ?? []) parts.push(`${costText(a.cost)}: ${effectText(a.effect)}`);
   for (const t of def.triggers ?? []) {
-    parts.push(`${t.on === "dies" ? "When this creature dies," : "Whenever this creature attacks,"} ${lower(effectText(t.effect))}`);
+    const lead =
+      t.on === "dies"
+        ? "When this creature dies,"
+        : t.on === "attacks"
+          ? "Whenever this creature attacks,"
+          : "At the beginning of your upkeep,";
+    parts.push(`${lead} ${lower(effectText(t.effect))}`);
   }
   return parts.join(" ");
 }

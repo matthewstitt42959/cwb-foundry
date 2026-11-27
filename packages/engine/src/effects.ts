@@ -90,6 +90,11 @@ export function applyEffect(
     return;
   }
 
+  if (effect.kind === "search_library") {
+    // The searching player chooses (or declines), so resolveTop must start a pending search.
+    throw new Error("search effects must be resolved by resolveTop, not applyEffect");
+  }
+
   if (effect.kind === "damage_all") {
     const amount = effect.amount === "x" ? x : effect.amount;
     if (amount > 0) {

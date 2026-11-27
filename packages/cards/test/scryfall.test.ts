@@ -119,6 +119,16 @@ describe("convertScryfallCard: supported cards", () => {
     ]);
   });
 
+  it("converts subtypes, an upkeep search trigger and fear (Ratcatcher)", () => {
+    expect(convert("Ratcatcher").def).toMatchObject({
+      subtypes: ["ogre", "rogue"],
+      keywords: ["fear"],
+      triggers: [{ on: "upkeep", effect: { kind: "search_library", subtype: "rat" } }],
+    });
+    expect(convert("Crypt Rats").def?.subtypes).toEqual(["rat"]);
+    expect(convert("Swamp").def?.subtypes).toEqual(["swamp"]);
+  });
+
   it("converts a dies trigger", () => {
     expect(convert("Disease Carriers").def?.triggers).toEqual([
       { on: "dies", effect: { kind: "pump", power: -2, toughness: -2, target: "creature", duration: "until_end_of_turn" } },

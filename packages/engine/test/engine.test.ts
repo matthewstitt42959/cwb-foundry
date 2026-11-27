@@ -350,6 +350,91 @@ describe("abilities with mana costs", () => {
   });
 });
 
+describe("discard spells", () => {
+  it("a discard sorcery resolves, then the opponent chooses what to discard", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const mind = give(s, "p1", "mind", "hand");
+    s = ok(mind.state, { type: "CAST", player: "p1", cardId: mind.id });
+    s = ok(ok(s, { type: "PASS", player: "p1" }), { type: "PASS", player: "p2" });
+    expect(s.pending).toBe("discard");
+    expect(s.discard).toEqual({ player: "p2", count: 1 });
+    expect(s.players.p1?.graveyard).toContain(mind.id);
+  });
+});
+
+describe("library searches and upkeep triggers", () => {
+  /** p1 has a scout in play and the given cards in their library; returns the state once the upkeep trigger is on the stack. */
+  function atUpkeepTrigger(libraryDefs: string[]) {
+    let s = passUntilPhase(newGame(), "main1");
+    s = give(s, "p1", "scout", "battlefield").state;
+    const ids: string[] = [];
+    for (const d of libraryDefs) {
+      const g = give(s, "p1", d, "hand");
+      s = clone(g.state);
+      const p1 = s.players.p1 as { hand: string[]; library: string[] };
+      p1.hand = p1.hand.filter((id) => id !== g.id);
+      p1.library.push(g.id);
+      ids.push(g.id);
+    }
+    for (let i = 0; i < 80 && s.stack.length === 0; i++) {
+      s = s.pending
+        ? ok(s, { type: "DECLARE_ATTACKERS", player: s.priority, attackers: [] })
+        : ok(s, { type: "PASS", player: s.priority });
+    }
+    return { s, ids };
+  }
+  const resolve = (s: GameState) => ok(ok(s, { type: "PASS", player: "p1" }), { type: "PASS", player: "p2" });
+
+  it("fires at the start of its controller's own upkeep, then asks them to choose", () => {
+    const { s } = atUpkeepTrigger(["ratling", "ratling", "bear"]);
+    expect(s.activePlayer).toBe("p1");
+    expect(rules.pack.phases[s.phaseIndex]?.id).toBe("upkeep");
+    expect(s.stack[0]).toMatchObject({ kind: "ability", effect: { kind: "search_library", subtype: "rat" } });
+    const g = resolve(s);
+    expect(g.pending).toBe("search");
+    expect(g.priority).toBe("p1");
+    // One option per distinct card (two identical ratlings count once), the non-rat is excluded, and declining is allowed.
+    const options = getLegalActions(rules, g);
+    expect(options).toHaveLength(2);
+    expect(options).toContainEqual({ type: "SEARCH", player: "p1", cardId: null });
+  });
+
+  it("taking a card moves it to hand and shuffles", () => {
+    const { s, ids } = atUpkeepTrigger(["ratling", "bear"]);
+    const before = s.players.p1?.library.length ?? 0;
+    let g = resolve(s);
+    g = ok(g, { type: "SEARCH", player: "p1", cardId: ids[0] as string });
+    expect(g.pending).toBeNull();
+    expect(g.players.p1?.hand).toContain(ids[0]);
+    expect(g.players.p1?.library).toHaveLength(before - 1);
+    expect(g.log.some((l) => l.includes("shuffles"))).toBe(true);
+  });
+
+  it("declining leaves the library alone", () => {
+    const { s } = atUpkeepTrigger(["ratling"]);
+    const before = s.players.p1?.library.length ?? 0;
+    let g = resolve(s);
+    g = ok(g, { type: "SEARCH", player: "p1", cardId: null });
+    expect(g.pending).toBeNull();
+    expect(g.players.p1?.library).toHaveLength(before);
+  });
+
+  it("rejects a card that doesn't match the subtype", () => {
+    const { s, ids } = atUpkeepTrigger(["ratling", "bear"]);
+    const g = resolve(s);
+    expect(validateAction(rules, g, { type: "SEARCH", player: "p1", cardId: ids[1] as string })).toBe(
+      "That card can't be taken",
+    );
+  });
+
+  it("does nothing when the library has no matching card", () => {
+    const { s } = atUpkeepTrigger(["bear"]);
+    const g = resolve(s);
+    expect(g.pending).toBeNull();
+    expect(g.log.some((l) => l.includes("finds no rat card"))).toBe(true);
+  });
+});
+
 describe("X costs and damage to everything", () => {
   function withSweeper(mountains: number, forests = 0) {
     let s = passUntilPhase(newGame(), "main1");

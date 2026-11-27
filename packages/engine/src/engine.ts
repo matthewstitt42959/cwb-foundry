@@ -13,7 +13,7 @@ import {
 import { applyEffect, checkState, drawCards, opponentOf } from "./effects";
 import { isLegalTarget, legalTargets, legalTargetsForSpec, targetSpecOf, targetSpecOfEffect } from "./targeting";
 import { planPayment } from "./mana";
-import { flushTriggers } from "./triggers";
+import { flushTriggers, queueTriggers } from "./triggers";
 import { shuffle } from "./rng";
 import type {
   Action,
@@ -79,6 +79,7 @@ export function createGame(rules: Ruleset, setup: GameSetup): GameState {
     stack: [],
     combat: null,
     pending: null,
+    search: null,
     triggers: [],
     targeting: null,
     discard: null,
@@ -91,6 +92,7 @@ export function createGame(rules: Ruleset, setup: GameSetup): GameState {
   for (const pid of order) drawCards(state, pid, rules.pack.startingHandSize);
   checkState(state);
   if (!state.over) enterPhase(rules, state);
+  flushTriggers(rules, state);
   return state;
 }
 
@@ -115,6 +117,9 @@ function enterPhase(rules: Ruleset, state: GameState): void {
           const inst = state.cards[id];
           if (inst) inst.tapped = false;
         }
+        break;
+      case "upkeep":
+        for (const id of state.players[state.activePlayer]?.battlefield ?? []) queueTriggers(rules, state, id, "upkeep");
         break;
       case "draw":
         if (!(state.turn === 1 && !rules.pack.drawOnFirstTurn)) drawCards(state, state.activePlayer, 1);
@@ -202,6 +207,41 @@ function manaFor(costs: Cost[], x: number): ManaCost {
   return total;
 }
 
+/** Library cards the searcher could take: one card per distinct definition, since they're interchangeable. */
+function searchOptions(rules: Ruleset, state: GameState, player: PlayerId, subtype: string): CardId[] {
+  const seen = new Set<string>();
+  const out: CardId[] = [];
+  for (const id of state.players[player]?.library ?? []) {
+    const inst = state.cards[id];
+    if (!inst || seen.has(inst.defId)) continue;
+    if (rules.defs[inst.defId]?.subtypes?.includes(subtype)) {
+      seen.add(inst.defId);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+/**
+ * Starts whichever player decision an effect needs (a discard, a library search).
+ * Returns false (a no-op) if there is nothing to decide, e.g. an empty hand or no matching card.
+ */
+function beginChoice(rules: Ruleset, state: GameState, effect: Effect, controller: PlayerId): boolean {
+  if (effect.kind === "discard") return beginDiscard(state, effect, controller);
+  if (effect.kind === "search_library") {
+    if (searchOptions(rules, state, controller, effect.subtype).length === 0) {
+      state.log.push(`${controller} finds no ${effect.subtype} card to take`);
+      return false;
+    }
+    state.pending = "search";
+    state.search = { player: controller, subtype: effect.subtype };
+    return true;
+  }
+  return false;
+}
+
+const needsChoice = (e: Effect) => e.kind === "discard" || e.kind === "search_library";
+
 /**
  * Can every component of this ability's cost currently be paid? A {T} cost needs the
  * source untapped and, like attacking, not summoning sick unless it has haste. A mana
@@ -250,8 +290,8 @@ function resolveTop(rules: Ruleset, state: GameState): void {
 
   if (item.kind === "ability") {
     const effect = item.effect;
-    if (effect.kind === "discard") {
-      if (beginDiscard(state, effect, item.controller)) return; // a discard is now pending
+    if (needsChoice(effect)) {
+      if (beginChoice(rules, state, effect, item.controller)) return; // a player decision is now pending
     } else {
       const spec = targetSpecOfEffect(effect);
       const target = item.targets[0];
@@ -276,9 +316,9 @@ function resolveTop(rules: Ruleset, state: GameState): void {
     inst.enteredTurn = state.turn;
     state.log.push(`${def.name} enters the battlefield`);
     for (const effect of def.effects ?? []) {
-      if (effect.kind === "discard") {
-        if (beginDiscard(state, effect, item.controller)) return; // a discard is now pending
-        continue; // nothing in hand to discard: no-op, like real MTG
+      if (needsChoice(effect)) {
+        if (beginChoice(rules, state, effect, item.controller)) return; // a player decision is now pending
+        continue; // nothing to choose from: no-op, like real MTG
       }
       applyEffect(rules, state, effect, item.controller, item.targets);
     }
@@ -289,7 +329,10 @@ function resolveTop(rules: Ruleset, state: GameState): void {
       state.log.push(`${def.name} fizzles (its target is gone)`);
     } else {
       state.log.push(`${def.name} resolves`);
-      for (const effect of def.effects ?? []) applyEffect(rules, state, effect, item.controller, item.targets);
+      for (const effect of def.effects ?? []) {
+        if (needsChoice(effect)) beginChoice(rules, state, effect, item.controller);
+        else applyEffect(rules, state, effect, item.controller, item.targets);
+      }
     }
     owner.graveyard.push(inst.id);
   }
@@ -301,6 +344,7 @@ function resolveTop(rules: Ruleset, state: GameState): void {
 function pendingActor(state: GameState): PlayerId | null {
   if (state.pending === "discard") return state.discard?.player ?? null;
   if (state.pending === "target") return state.targeting?.player ?? null;
+  if (state.pending === "search") return state.search?.player ?? null;
   return declarer(state);
 }
 
@@ -350,6 +394,13 @@ export function validateAction(rules: Ruleset, state: GameState, action: Action)
     if (action.type === "DISCARD" && state.pending === "discard") {
       return validateDiscard(state, action.cardIds);
     }
+    if (action.type === "SEARCH" && state.pending === "search" && state.search) {
+      if (action.cardId === null) return null;
+      const ok = searchOptions(rules, state, action.player, state.search.subtype).some(
+        (id) => state.cards[id]?.defId === state.cards[action.cardId as CardId]?.defId,
+      );
+      return state.players[action.player]?.library.includes(action.cardId) && ok ? null : "That card can't be taken";
+    }
     if (action.type === "CHOOSE_TARGET" && state.pending === "target") {
       const spec = state.targeting && targetSpecOfEffect(state.targeting.effect);
       return spec && isLegalTarget(rules, state, spec, action.target) ? null : "Invalid target";
@@ -357,13 +408,15 @@ export function validateAction(rules: Ruleset, state: GameState, action: Action)
     if (state.pending === "attackers") return "Declare attackers first";
     if (state.pending === "blockers") return "Declare blockers first";
     if (state.pending === "target") return "Choose a target first";
+    if (state.pending === "search") return "Finish searching your library first";
     return "Discard a card first";
   }
   if (
     action.type === "DECLARE_ATTACKERS" ||
     action.type === "DECLARE_BLOCKERS" ||
     action.type === "DISCARD" ||
-    action.type === "CHOOSE_TARGET"
+    action.type === "CHOOSE_TARGET" ||
+    action.type === "SEARCH"
   ) {
     return "Not declaring now";
   }
@@ -464,6 +517,13 @@ export function getLegalActions(rules: Ruleset, state: GameState): Action[] {
     return legalTargetsForSpec(rules, state, targetSpecOfEffect(effect)).map(
       (target): Action => ({ type: "CHOOSE_TARGET", player: who, target }),
     );
+  }
+  if (state.pending === "search" && state.search) {
+    const { player: who, subtype } = state.search;
+    return [
+      ...searchOptions(rules, state, who, subtype).map((cardId): Action => ({ type: "SEARCH", player: who, cardId })),
+      { type: "SEARCH", player: who, cardId: null },
+    ];
   }
   if (state.pending === "discard" && state.discard) {
     const { player: who, count } = state.discard;
@@ -601,6 +661,26 @@ export function applyAction(rules: Ruleset, state: GameState, action: Action): A
           targets: [action.target],
         });
         next.log.push(`${rules.defs[next.cards[t.sourceId]?.defId ?? ""]?.name ?? t.sourceId}'s ability triggers`);
+      }
+      next.passes = 0;
+      next.priority = next.activePlayer;
+      break;
+    }
+    case "SEARCH": {
+      const s = next.search;
+      next.pending = null;
+      next.search = null;
+      const searcher = next.players[action.player];
+      if (searcher && action.cardId !== null) {
+        searcher.library = searcher.library.filter((id) => id !== action.cardId);
+        searcher.hand.push(action.cardId);
+        const shuffled = shuffle(searcher.library, next.rngState);
+        next.rngState = shuffled.state;
+        searcher.library = shuffled.items;
+        const name = rules.defs[next.cards[action.cardId]?.defId ?? ""]?.name ?? action.cardId;
+        next.log.push(`${action.player} reveals ${name}, puts it into their hand, and shuffles`);
+      } else if (s) {
+        next.log.push(`${action.player} doesn't search`);
       }
       next.passes = 0;
       next.priority = next.activePlayer;

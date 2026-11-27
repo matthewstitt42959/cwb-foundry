@@ -344,6 +344,25 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
                   </button>
                 </>
               )}
+              {state.pending === "search" && myDecision && (
+                <>
+                  <span>Search your library for a {state.search?.subtype} card:</span>
+                  {legal.flatMap((a) =>
+                    a.type === "SEARCH" && a.cardId !== null ? (
+                      <button key={a.cardId} type="button" className="btn primary" onClick={() => act(a)}>
+                        {defOf(a.cardId)?.name}
+                      </button>
+                    ) : [],
+                  )}
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => act({ type: "SEARCH", player: HUMAN, cardId: null })}
+                  >
+                    Don&apos;t search
+                  </button>
+                </>
+              )}
               {triggerPick && (
                 <span>
                   Choose a target for {defOf(state.targeting?.sourceId ?? "")?.name}&apos;s triggered ability

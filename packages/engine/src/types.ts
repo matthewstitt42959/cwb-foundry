@@ -37,6 +37,8 @@ export type Effect =
   | { kind: "lose_life"; amount: number; target: PlayerTargetSpec }
   /** Damage to every creature and every player (the controller's side included). "x" reads the ability's X. */
   | { kind: "damage_all"; amount: number | "x" }
+  /** "You may search your library for a <subtype> card, reveal it, put it into your hand, then shuffle." */
+  | { kind: "search_library"; subtype: string }
   | { kind: "pump"; power: number; toughness: number; target: ChosenTargetSpec; duration: "until_end_of_turn" };
 
 /** A target picked when a spell is cast. */
@@ -61,7 +63,7 @@ export interface Ability {
 }
 
 /** Events a triggered ability can listen for on its own creature. */
-export type TriggerEvent = "dies" | "attacks";
+export type TriggerEvent = "dies" | "attacks" | "upkeep";
 
 /** "When this dies, ..." / "Whenever this attacks, ...": goes on the stack when the event happens. */
 export interface Trigger {
@@ -107,6 +109,8 @@ export interface CardDef {
   game: string;
   name: string;
   types: CardType[];
+  /** Lowercase subtypes from the type line after the dash ("rat", "ogre", "swamp"...). */
+  subtypes?: string[];
   cost?: ManaCost;
   /** Colour of mana produced when a land is tapped. */
   produces?: Color;
@@ -124,6 +128,7 @@ export type CardDefs = Record<DefId, CardDef>;
 
 export type PhaseHook =
   | "untap"
+  | "upkeep"
   | "draw"
   | "declare_attackers"
   | "declare_blockers"
@@ -213,9 +218,11 @@ export interface GameState {
   stack: StackItem[];
   combat: CombatState | null;
   /** Set while a player must declare attackers/blockers, choose a card to discard, or pick a trigger's target. */
-  pending: "attackers" | "blockers" | "discard" | "target" | null;
+  pending: "attackers" | "blockers" | "discard" | "target" | "search" | null;
   /** Triggers that have fired and are waiting to go on the stack, in order. */
   triggers: PendingTrigger[];
+  /** Set while `pending` is "search": who is searching their library, and for which subtype. */
+  search: { player: PlayerId; subtype: string } | null;
   /** Set while `pending` is "target": whose trigger needs a target, and what it does. */
   targeting: { player: PlayerId; sourceId: CardId; effect: Effect } | null;
   /** Set while `pending` is "discard": who must discard, and how many cards. */
@@ -235,6 +242,8 @@ export type Action =
   | { type: "DISCARD"; player: PlayerId; cardIds: CardId[] }
   | { type: "ACTIVATE"; player: PlayerId; cardId: CardId; abilityIndex: number; targets?: Target[]; x?: number }
   | { type: "CHOOSE_TARGET"; player: PlayerId; target: Target }
+  /** Resolves a library search: the chosen card, or null to decline. */
+  | { type: "SEARCH"; player: PlayerId; cardId: CardId | null }
   | { type: "CONCEDE"; player: PlayerId }
   | { type: "RECLAIM_GRAVEYARD"; player: PlayerId };
 

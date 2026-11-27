@@ -33,6 +33,8 @@ type BasicColor = (typeof BASIC_COLORS)[number];
 
 const COLOR_OF: Record<string, BasicColor> = { white: "W", blue: "U", black: "B", red: "R", green: "G" };
 
+const CARD_TYPE_WORDS = new Set(["creature", "land", "instant", "sorcery", "artifact", "enchantment", "planeswalker"]);
+
 const SUPERTYPES = new Set(["basic", "legendary", "snow", "world", "ongoing"]);
 
 const NUMBER_WORDS: Record<string, number> = {
@@ -92,6 +94,11 @@ function parseClause(clause: string): Effect | null {
   }
   if ((m = clause.match(/^~ deals (\d+|x) damage to each creature and each player$/))) {
     return { kind: "damage_all", amount: m[1] === "x" ? "x" : Number(m[1]) };
+  }
+  if ((m = clause.match(/^you may search your library for an? (\w+) card, reveal (?:it|that card), put (?:it|that card) into your hand, then shuffle(?: your library)?$/))) {
+    const subtype = m[1] ?? "";
+    // Only real subtypes: "creature card" or "land card" would match nothing in CardDef.subtypes.
+    return CARD_TYPE_WORDS.has(subtype) ? null : { kind: "search_library", subtype };
   }
   if (clause === "destroy target creature") return { kind: "destroy", target: "creature" };
   if ((m = clause.match(/^you gain (\w+) life$/))) {
@@ -233,6 +240,8 @@ export function convertScryfallCard(card: ScryfallCard): ConvertResult {
     types: [cardType],
   };
   if (card.image_uris?.normal) base.imageUrl = card.image_uris.normal;
+  const subtypes = (typeLine.split("—")[1] ?? "").split(/\s+/).filter(Boolean).map((w) => w.toLowerCase());
+  if (subtypes.length > 0) base.subtypes = subtypes;
 
   if (cardType === "land") {
     const produced = card.produced_mana ?? [];
@@ -275,10 +284,11 @@ export function convertScryfallCard(card: ScryfallCard): ConvertResult {
         continue;
       }
 
-      const trig = normalized.match(/^when(?:ever)? ~ (dies|attacks),\s*(.+?)\.?$/i);
-      const trigEffect = trig ? parseClause((trig[2] ?? "").trim().toLowerCase()) : null;
+      const trig = normalized.match(/^(?:when(?:ever)? ~ (dies|attacks)|at the beginning of your (upkeep)),\s*(.+?)\.?$/i);
+      const trigEffect = trig ? parseClause((trig[3] ?? "").trim().toLowerCase()) : null;
       if (trig && trigEffect) {
-        triggers.push({ on: trig[1]?.toLowerCase() === "dies" ? "dies" : "attacks", effect: trigEffect });
+        const on = (trig[1] ?? trig[2] ?? "").toLowerCase();
+        triggers.push({ on: on === "dies" ? "dies" : on === "attacks" ? "attacks" : "upkeep", effect: trigEffect });
         continue;
       }
 

@@ -31,6 +31,7 @@ export function chooseAction(rules: Ruleset, state: GameState): Action {
   else if (state.pending === "blockers") choice = decideBlockers(rules, state, me);
   else if (state.pending === "discard") choice = decideDiscard(rules, state, me);
   else if (state.pending === "target") choice = decideTrigger(rules, state, me, legal);
+  else if (state.pending === "search") choice = decideSearch(rules, state, me, legal);
   else choice = decideMain(rules, state, me, legal) ?? pass;
 
   if (validateAction(rules, state, choice) === null) return choice;
@@ -165,6 +166,19 @@ function decideTrigger(rules: Ruleset, state: GameState, me: PlayerId, legal: Ac
     if (!best || score > best.score) best = { action: a, score };
   }
   return best?.action ?? { type: "PASS", player: me };
+}
+
+// ---- library search ------------------------------------------------------------
+
+/** Take the most valuable card the search allows. */
+function decideSearch(rules: Ruleset, state: GameState, me: PlayerId, legal: Action[]): Action {
+  let best: { action: Action; score: number } | null = null;
+  for (const a of legal) {
+    if (a.type !== "SEARCH" || a.cardId === null) continue;
+    const score = value(rules, state, a.cardId);
+    if (!best || score > best.score) best = { action: a, score };
+  }
+  return best?.action ?? { type: "SEARCH", player: me, cardId: null };
 }
 
 // ---- main phase -----------------------------------------------------------
