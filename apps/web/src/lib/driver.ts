@@ -42,8 +42,15 @@ export function autoplay(rules: Ruleset, state: GameState, opts: DriverOptions):
     const canPass = legal.some((a) => a.type === "PASS");
     const onlyPass = legal.length === 1 && canPass;
     const phase = rules.pack.phases[s.phaseIndex];
+    // An empty library with a graveyard to reclaim is a real choice: never skip past it,
+    // or the human is auto-passed straight into the draw that loses the game.
+    const canReclaim = legal.some((a) => a.type === "RECLAIM_GRAVEYARD");
     const quiet =
-      !opts.stopEverywhere && !s.pending && s.stack.length === 0 && !(s.activePlayer === HUMAN && phase?.main);
+      !opts.stopEverywhere &&
+      !canReclaim &&
+      !s.pending &&
+      s.stack.length === 0 &&
+      !(s.activePlayer === HUMAN && phase?.main);
 
     if (canPass && (onlyPass || quiet)) {
       const r = applyAction(rules, s, { type: "PASS", player: HUMAN });
