@@ -9,6 +9,7 @@ import {
   type CardId,
   type Effect,
   type GameState,
+  type Keyword,
   type ManaCost,
   type PlayerId,
   type Ruleset,
@@ -56,8 +57,15 @@ function opponentOf(state: GameState, me: PlayerId): PlayerId {
   return state.order.find((p) => p !== me) as PlayerId;
 }
 
+const hasKw = (r: Ruleset, s: GameState, id: CardId, kw: Keyword) => !!defOf(r, s, id)?.keywords?.includes(kw);
+
+/** Mirrors the engine's per-pair blocking rules. Menace needs two blockers, which the AI never plans. */
 function canBlock(r: Ruleset, s: GameState, blocker: CardId, attacker: CardId): boolean {
-  return !isFlyer(r, s, attacker) || isFlyer(r, s, blocker);
+  if (hasKw(r, s, attacker, "menace")) return false;
+  if (isFlyer(r, s, attacker) && !isFlyer(r, s, blocker)) return false;
+  if (hasKw(r, s, attacker, "fear") && !((defOf(r, s, blocker)?.cost?.B ?? 0) > 0)) return false;
+  if (hasKw(r, s, attacker, "skulk") && power(r, s, blocker) > power(r, s, attacker)) return false;
+  return true;
 }
 
 // ---- attacking ------------------------------------------------------------

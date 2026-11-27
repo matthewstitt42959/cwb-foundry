@@ -20,6 +20,9 @@ const SUPPORTED_KEYWORDS: Record<string, Keyword> = {
   haste: "haste",
   vigilance: "vigilance",
   deathtouch: "deathtouch",
+  fear: "fear",
+  menace: "menace",
+  skulk: "skulk",
 };
 
 const BASIC_COLORS = ["W", "U", "B", "R", "G"] as const;
@@ -87,7 +90,8 @@ function parseClause(clause: string): Effect | null {
     const n = parseCount(m[1] ?? "");
     return n ? { kind: "draw", amount: n, target: "self" } : null;
   }
-  if ((m = clause.match(/^target opponent discards? (\w+) cards?$/))) {
+  // Two players only, so "each opponent" is the same single player as "target opponent".
+  if ((m = clause.match(/^(?:target|each) opponent discards? (\w+) cards?$/))) {
     const n = parseCount(m[1] ?? "");
     return n ? { kind: "discard", amount: n, target: "opponent" } : null;
   }
@@ -234,6 +238,11 @@ export function convertScryfallCard(card: ScryfallCard): ConvertResult {
       const ability = parseActivatedAbility(normalized);
       if (ability) {
         abilities.push(ability);
+        continue;
+      }
+
+      if (/^~ can't block\.?$/i.test(normalized)) {
+        keywords.push("cant_block");
         continue;
       }
 

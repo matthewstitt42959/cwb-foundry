@@ -57,9 +57,11 @@ export function blockCandidates(rules: Ruleset, state: GameState): CardId[] {
   if (!them) return [];
   return them.battlefield.filter((id) => {
     const inst = state.cards[id];
-    return !!inst && !inst.tapped && isCreature(rules, state, id);
+    return !!inst && !inst.tapped && isCreature(rules, state, id) && !hasKeyword(rules, state, id, "cant_block");
   });
 }
+
+const isBlack = (rules: Ruleset, state: GameState, id: CardId) => (defOf(rules, state, id)?.cost?.B ?? 0) > 0;
 
 export function validateAttackers(rules: Ruleset, state: GameState, attackers: CardId[]): string | null {
   const allowed = new Set(attackCandidates(rules, state));
@@ -72,7 +74,16 @@ export function validateAttackers(rules: Ruleset, state: GameState, attackers: C
   return null;
 }
 
-export function validateBlocks(rules: Ruleset, state: GameState, blocks: BlockAssignment[]): string | null {
+/**
+ * `partial` is for UIs building a declaration one block at a time: it skips the check
+ * that a menace attacker has its second blocker, which can only hold once the set is final.
+ */
+export function validateBlocks(
+  rules: Ruleset,
+  state: GameState,
+  blocks: BlockAssignment[],
+  partial = false,
+): string | null {
   const allowed = new Set(blockCandidates(rules, state));
   const attacking = new Set(state.combat?.attackers ?? []);
   const used = new Set<CardId>();
@@ -83,6 +94,21 @@ export function validateBlocks(rules: Ruleset, state: GameState, blocks: BlockAs
     if (!attacking.has(attacker)) return "That creature isn't attacking";
     if (hasKeyword(rules, state, attacker, "flying") && !hasKeyword(rules, state, blocker, "flying")) {
       return "Only flying creatures can block a flyer";
+    }
+    if (hasKeyword(rules, state, attacker, "fear") && !isBlack(rules, state, blocker)) {
+      return "Only black creatures can block a creature with fear";
+    }
+    if (
+      hasKeyword(rules, state, attacker, "skulk") &&
+      effectivePower(rules, state, blocker) > effectivePower(rules, state, attacker)
+    ) {
+      return "A creature with skulk can't be blocked by a creature with greater power";
+    }
+  }
+  for (const attacker of partial ? [] : attacking) {
+    const count = blocks.filter((b) => b.attacker === attacker).length;
+    if (count === 1 && hasKeyword(rules, state, attacker, "menace")) {
+      return "A creature with menace must be blocked by two or more creatures";
     }
   }
   return null;

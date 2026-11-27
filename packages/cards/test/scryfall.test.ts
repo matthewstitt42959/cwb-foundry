@@ -84,6 +84,22 @@ describe("convertScryfallCard: supported cards", () => {
     });
   });
 
+  it("converts 'each opponent discards' like 'target opponent discards' (two players only)", () => {
+    for (const name of ["Burglar Rat", "Rank Rat", "Nezumi Informant"]) {
+      expect(convert(name).def?.effects).toEqual([{ kind: "discard", amount: 1, target: "opponent" }]);
+    }
+  });
+
+  it("converts evasion keywords", () => {
+    expect(convert("Razortooth Rats").def?.keywords).toEqual(["fear"]);
+    expect(convert("Elephant-Rat").def?.keywords).toEqual(["menace"]);
+    expect(convert("Rancid Rats").def?.keywords).toEqual(["skulk", "deathtouch"]);
+  });
+
+  it("converts 'this creature can't block'", () => {
+    expect(convert("Nezumi Cutthroat").def?.keywords).toEqual(["fear", "cant_block"]);
+  });
+
   it("converts removal, card draw and compound spells", () => {
     expect(convert("Murder").def?.effects).toEqual([{ kind: "destroy", target: "creature" }]);
     expect(convert("Divination").def?.effects).toEqual([{ kind: "draw", amount: 2, target: "self" }]);

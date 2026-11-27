@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyAction,
   attackCandidates,
+  blockCandidates,
   clone,
   getLegalActions,
   type Action,
@@ -283,5 +284,65 @@ describe("declaration legal actions", () => {
     expect(legal.every((a) => a.type === "DECLARE_BLOCKERS" && a.player === "p2")).toBe(true);
     expect(legal).toHaveLength(2); // no block, or giant blocks bear
     for (const a of legal) expect(applyAction(rules, g, a).ok).toBe(true);
+  });
+});
+
+describe("evasion keywords", () => {
+  const block = (blocker: CardId, attacker: CardId) => ({ blocker, attacker });
+
+  function blocking(attacker: string, defenders: string[]) {
+    const { s, p1Ids, p2Ids } = atAttackers([attacker], defenders);
+    const [a] = p1Ids as [CardId];
+    const g = passRound(ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [a] }));
+    expect(g.pending).toBe("blockers");
+    return { g, a, d: p2Ids };
+  }
+
+  const tryBlocks = (g: GameState, blocks: ReturnType<typeof block>[]) =>
+    applyAction(rules, g, { type: "DECLARE_BLOCKERS", player: "p2", blocks });
+
+  it("fear: only a black creature can block it", () => {
+    const { g, a, d } = blocking("shade", ["bear", "ghoul"]);
+    const [bear, ghoul] = d as [CardId, CardId];
+    expect(tryBlocks(g, [block(bear, a)])).toEqual({
+      ok: false,
+      error: "Only black creatures can block a creature with fear",
+    });
+    expect(tryBlocks(g, [block(ghoul, a)]).ok).toBe(true);
+  });
+
+  it("menace: a single blocker is rejected, two are fine", () => {
+    const { g, a, d } = blocking("ogre", ["bear", "giant"]);
+    const [bear, giant] = d as [CardId, CardId];
+    expect(tryBlocks(g, [block(bear, a)])).toEqual({
+      ok: false,
+      error: "A creature with menace must be blocked by two or more creatures",
+    });
+    expect(tryBlocks(g, [block(bear, a), block(giant, a)]).ok).toBe(true);
+    expect(tryBlocks(g, []).ok).toBe(true);
+  });
+
+  it("skulk: can't be blocked by a creature with greater power", () => {
+    const { g, a, d } = blocking("skulker", ["bear", "ghoul"]);
+    const [bear, ghoul] = d as [CardId, CardId];
+    expect(tryBlocks(g, [block(bear, a)])).toEqual({
+      ok: false,
+      error: "A creature with skulk can't be blocked by a creature with greater power",
+    });
+    expect(tryBlocks(g, [block(ghoul, a)]).ok).toBe(true); // equal power is fine
+  });
+
+  it("cant_block: is never a block candidate", () => {
+    const { s } = atAttackers(["bear"], ["coward", "ghoul"]);
+    const g = passRound(
+      ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [s.players.p1?.battlefield[0] as CardId] }),
+    );
+    expect(g.pending).toBe("blockers");
+    const [coward, ghoul] = s.players.p2?.battlefield.slice(-2) as [CardId, CardId];
+    expect(blockCandidates(rules, g)).toEqual([ghoul]);
+    expect(tryBlocks(g, [block(coward, g.combat?.attackers[0] as CardId)])).toEqual({
+      ok: false,
+      error: "That creature can't block",
+    });
   });
 });

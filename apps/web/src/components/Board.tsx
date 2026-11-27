@@ -8,6 +8,7 @@ import {
   legalTargets,
   targetSpecOf,
   validateAction,
+  validateBlocks,
   type Action,
   type BlockAssignment,
   type CardId,
@@ -163,7 +164,7 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
     if (picking) return pickTarget({ kind: "card", id });
     if (blockSel && incoming.includes(id)) {
       const next = [...blocks, { blocker: blockSel, attacker: id }];
-      const err = validateAction(rules, state, { type: "DECLARE_BLOCKERS", player: HUMAN, blocks: next });
+      const err = validateBlocks(rules, state, next, true);
       if (err) return setNotice(err);
       setNotice("");
       setBlocks(next);

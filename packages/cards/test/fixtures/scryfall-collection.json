@@ -603,6 +603,204 @@
     "small": "https://cards.scryfall.io/small/front/e/d/ed8c028e-6656-47ef-97fb-de99f8833d5f.jpg?1783946560",
     "normal": "https://cards.scryfall.io/normal/front/e/d/ed8c028e-6656-47ef-97fb-de99f8833d5f.jpg?1783946560"
    }
+  },
+  {
+   "object": "card",
+   "id": "de1c8758-ce3d-49cf-8173-c0eb46f5e7bc",
+   "oracle_id": "2f807301-37df-4724-871a-08e3512b07b3",
+   "name": "Burglar Rat",
+   "layout": "normal",
+   "mana_cost": "{1}{B}",
+   "type_line": "Creature \u2014 Rat",
+   "oracle_text": "When this creature enters, each opponent discards a card.",
+   "power": "1",
+   "toughness": "1",
+   "keywords": [],
+   "image_uris": {
+    "small": "https://cards.scryfall.io/small/front/d/e/de1c8758-ce3d-49cf-8173-c0eb46f5e7bc.jpg?1783909076",
+    "normal": "https://cards.scryfall.io/normal/front/d/e/de1c8758-ce3d-49cf-8173-c0eb46f5e7bc.jpg?1783909076",
+    "large": "https://cards.scryfall.io/large/front/d/e/de1c8758-ce3d-49cf-8173-c0eb46f5e7bc.jpg?1783909076",
+    "png": "https://cards.scryfall.io/png/front/d/e/de1c8758-ce3d-49cf-8173-c0eb46f5e7bc.png?1783909076",
+    "art_crop": "https://cards.scryfall.io/art_crop/front/d/e/de1c8758-ce3d-49cf-8173-c0eb46f5e7bc.jpg?1783909076",
+    "border_crop": "https://cards.scryfall.io/border_crop/front/d/e/de1c8758-ce3d-49cf-8173-c0eb46f5e7bc.jpg?1783909076",
+    "thumb": "https://cards.scryfall.io/thumb/front/d/e/de1c8758-ce3d-49cf-8173-c0eb46f5e7bc.webp?1783909076",
+    "grid": "https://cards.scryfall.io/grid/front/d/e/de1c8758-ce3d-49cf-8173-c0eb46f5e7bc.webp?1783909076",
+    "display": "https://cards.scryfall.io/display/front/d/e/de1c8758-ce3d-49cf-8173-c0eb46f5e7bc.webp?1783909076",
+    "art": "https://cards.scryfall.io/art/front/d/e/de1c8758-ce3d-49cf-8173-c0eb46f5e7bc.webp?1783909076",
+    "crop": "https://cards.scryfall.io/crop/front/d/e/de1c8758-ce3d-49cf-8173-c0eb46f5e7bc.webp?1783909076",
+    "jpeg": "https://cards.scryfall.io/normal/front/d/e/de1c8758-ce3d-49cf-8173-c0eb46f5e7bc.jpg?1783909076"
+   }
+  },
+  {
+   "object": "card",
+   "id": "4ff6da82-d7dd-4b59-b7e6-30670cea7169",
+   "oracle_id": "64e7ef06-ba30-4b19-9d44-ca77944cc930",
+   "name": "Rank Rat",
+   "layout": "normal",
+   "mana_cost": "{1}{B}",
+   "type_line": "Creature \u2014 Zombie Rat",
+   "oracle_text": "When this creature enters, each opponent discards a card.",
+   "power": "1",
+   "toughness": "1",
+   "keywords": [],
+   "image_uris": {
+    "small": "https://cards.scryfall.io/small/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.jpg?1789556727",
+    "normal": "https://cards.scryfall.io/normal/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.jpg?1789556727",
+    "large": "https://cards.scryfall.io/large/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.jpg?1789556727",
+    "png": "https://cards.scryfall.io/png/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.png?1789556727",
+    "art_crop": "https://cards.scryfall.io/art_crop/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.jpg?1789556727",
+    "border_crop": "https://cards.scryfall.io/border_crop/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.jpg?1789556727",
+    "thumb": "https://cards.scryfall.io/thumb/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.webp?1789556727",
+    "grid": "https://cards.scryfall.io/grid/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.webp?1789556727",
+    "display": "https://cards.scryfall.io/display/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.webp?1789556727",
+    "art": "https://cards.scryfall.io/art/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.webp?1789556727",
+    "crop": "https://cards.scryfall.io/crop/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.webp?1789556727",
+    "jpeg": "https://cards.scryfall.io/normal/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.jpg?1789556727"
+   }
+  },
+  {
+   "object": "card",
+   "id": "e36fbff8-471e-4cf8-8946-e1e5cdf598af",
+   "oracle_id": "a70ffefb-840c-48c3-a59d-e12306086bb6",
+   "name": "Nezumi Informant",
+   "layout": "normal",
+   "mana_cost": "{1}{B}",
+   "type_line": "Creature \u2014 Rat Rogue",
+   "oracle_text": "When this creature enters, each opponent discards a card.",
+   "power": "1",
+   "toughness": "1",
+   "keywords": [],
+   "image_uris": {
+    "small": "https://cards.scryfall.io/small/front/e/3/e36fbff8-471e-4cf8-8946-e1e5cdf598af.jpg?1783917003",
+    "normal": "https://cards.scryfall.io/normal/front/e/3/e36fbff8-471e-4cf8-8946-e1e5cdf598af.jpg?1783917003",
+    "large": "https://cards.scryfall.io/large/front/e/3/e36fbff8-471e-4cf8-8946-e1e5cdf598af.jpg?1783917003",
+    "png": "https://cards.scryfall.io/png/front/e/3/e36fbff8-471e-4cf8-8946-e1e5cdf598af.png?1783917003",
+    "art_crop": "https://cards.scryfall.io/art_crop/front/e/3/e36fbff8-471e-4cf8-8946-e1e5cdf598af.jpg?1783917003",
+    "border_crop": "https://cards.scryfall.io/border_crop/front/e/3/e36fbff8-471e-4cf8-8946-e1e5cdf598af.jpg?1783917003",
+    "thumb": "https://cards.scryfall.io/thumb/front/e/3/e36fbff8-471e-4cf8-8946-e1e5cdf598af.webp?1783917003",
+    "grid": "https://cards.scryfall.io/grid/front/e/3/e36fbff8-471e-4cf8-8946-e1e5cdf598af.webp?1783917003",
+    "display": "https://cards.scryfall.io/display/front/e/3/e36fbff8-471e-4cf8-8946-e1e5cdf598af.webp?1783917003",
+    "art": "https://cards.scryfall.io/art/front/e/3/e36fbff8-471e-4cf8-8946-e1e5cdf598af.webp?1783917003",
+    "crop": "https://cards.scryfall.io/crop/front/e/3/e36fbff8-471e-4cf8-8946-e1e5cdf598af.webp?1783917003",
+    "jpeg": "https://cards.scryfall.io/normal/front/e/3/e36fbff8-471e-4cf8-8946-e1e5cdf598af.jpg?1783917003"
+   }
+  },
+  {
+   "object": "card",
+   "id": "92750247-eba4-4810-a758-f943cd8a16b1",
+   "oracle_id": "72e9a207-dad9-4c51-8040-e90a36bd35e6",
+   "name": "Razortooth Rats",
+   "layout": "normal",
+   "mana_cost": "{2}{B}",
+   "type_line": "Creature \u2014 Rat",
+   "oracle_text": "Fear (This creature can't be blocked except by artifact creatures and/or black creatures.)",
+   "power": "2",
+   "toughness": "1",
+   "keywords": [
+    "Fear"
+   ],
+   "image_uris": {
+    "small": "https://cards.scryfall.io/small/front/9/2/92750247-eba4-4810-a758-f943cd8a16b1.jpg?1783943986",
+    "normal": "https://cards.scryfall.io/normal/front/9/2/92750247-eba4-4810-a758-f943cd8a16b1.jpg?1783943986",
+    "large": "https://cards.scryfall.io/large/front/9/2/92750247-eba4-4810-a758-f943cd8a16b1.jpg?1783943986",
+    "png": "https://cards.scryfall.io/png/front/9/2/92750247-eba4-4810-a758-f943cd8a16b1.png?1783943986",
+    "art_crop": "https://cards.scryfall.io/art_crop/front/9/2/92750247-eba4-4810-a758-f943cd8a16b1.jpg?1783943986",
+    "border_crop": "https://cards.scryfall.io/border_crop/front/9/2/92750247-eba4-4810-a758-f943cd8a16b1.jpg?1783943986",
+    "thumb": "https://cards.scryfall.io/thumb/front/9/2/92750247-eba4-4810-a758-f943cd8a16b1.webp?1783943986",
+    "grid": "https://cards.scryfall.io/grid/front/9/2/92750247-eba4-4810-a758-f943cd8a16b1.webp?1783943986",
+    "display": "https://cards.scryfall.io/display/front/9/2/92750247-eba4-4810-a758-f943cd8a16b1.webp?1783943986",
+    "art": "https://cards.scryfall.io/art/front/9/2/92750247-eba4-4810-a758-f943cd8a16b1.webp?1783943986",
+    "crop": "https://cards.scryfall.io/crop/front/9/2/92750247-eba4-4810-a758-f943cd8a16b1.webp?1783943986",
+    "jpeg": "https://cards.scryfall.io/normal/front/9/2/92750247-eba4-4810-a758-f943cd8a16b1.jpg?1783943986"
+   }
+  },
+  {
+   "object": "card",
+   "id": "0568f28f-e830-4a7a-91d3-43e78bb86c8f",
+   "oracle_id": "84557d9d-ee22-46c9-8f4a-62a440fb302f",
+   "name": "Elephant-Rat",
+   "layout": "normal",
+   "mana_cost": "{1}{B}",
+   "type_line": "Creature \u2014 Elephant Rat",
+   "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)",
+   "power": "1",
+   "toughness": "3",
+   "keywords": [
+    "Menace"
+   ],
+   "image_uris": {
+    "small": "https://cards.scryfall.io/small/front/0/5/0568f28f-e830-4a7a-91d3-43e78bb86c8f.jpg?1783904782",
+    "normal": "https://cards.scryfall.io/normal/front/0/5/0568f28f-e830-4a7a-91d3-43e78bb86c8f.jpg?1783904782",
+    "large": "https://cards.scryfall.io/large/front/0/5/0568f28f-e830-4a7a-91d3-43e78bb86c8f.jpg?1783904782",
+    "png": "https://cards.scryfall.io/png/front/0/5/0568f28f-e830-4a7a-91d3-43e78bb86c8f.png?1783904782",
+    "art_crop": "https://cards.scryfall.io/art_crop/front/0/5/0568f28f-e830-4a7a-91d3-43e78bb86c8f.jpg?1783904782",
+    "border_crop": "https://cards.scryfall.io/border_crop/front/0/5/0568f28f-e830-4a7a-91d3-43e78bb86c8f.jpg?1783904782",
+    "thumb": "https://cards.scryfall.io/thumb/front/0/5/0568f28f-e830-4a7a-91d3-43e78bb86c8f.webp?1783904782",
+    "grid": "https://cards.scryfall.io/grid/front/0/5/0568f28f-e830-4a7a-91d3-43e78bb86c8f.webp?1783904782",
+    "display": "https://cards.scryfall.io/display/front/0/5/0568f28f-e830-4a7a-91d3-43e78bb86c8f.webp?1783904782",
+    "art": "https://cards.scryfall.io/art/front/0/5/0568f28f-e830-4a7a-91d3-43e78bb86c8f.webp?1783904782",
+    "crop": "https://cards.scryfall.io/crop/front/0/5/0568f28f-e830-4a7a-91d3-43e78bb86c8f.webp?1783904782",
+    "jpeg": "https://cards.scryfall.io/normal/front/0/5/0568f28f-e830-4a7a-91d3-43e78bb86c8f.jpg?1783904782"
+   }
+  },
+  {
+   "object": "card",
+   "id": "336e0a75-8104-4e88-aad0-af7ac3efc115",
+   "oracle_id": "e3552730-fe09-443f-b432-9640b69c7bbb",
+   "name": "Rancid Rats",
+   "layout": "normal",
+   "mana_cost": "{1}{B}",
+   "type_line": "Creature \u2014 Zombie Rat",
+   "oracle_text": "Skulk (This creature can't be blocked by creatures with greater power.)\nDeathtouch (Any amount of damage this deals to a creature is enough to destroy it.)",
+   "power": "1",
+   "toughness": "1",
+   "keywords": [
+    "Skulk",
+    "Deathtouch"
+   ],
+   "image_uris": {
+    "small": "https://cards.scryfall.io/small/front/3/3/336e0a75-8104-4e88-aad0-af7ac3efc115.jpg?1783937767",
+    "normal": "https://cards.scryfall.io/normal/front/3/3/336e0a75-8104-4e88-aad0-af7ac3efc115.jpg?1783937767",
+    "large": "https://cards.scryfall.io/large/front/3/3/336e0a75-8104-4e88-aad0-af7ac3efc115.jpg?1783937767",
+    "png": "https://cards.scryfall.io/png/front/3/3/336e0a75-8104-4e88-aad0-af7ac3efc115.png?1783937767",
+    "art_crop": "https://cards.scryfall.io/art_crop/front/3/3/336e0a75-8104-4e88-aad0-af7ac3efc115.jpg?1783937767",
+    "border_crop": "https://cards.scryfall.io/border_crop/front/3/3/336e0a75-8104-4e88-aad0-af7ac3efc115.jpg?1783937767",
+    "thumb": "https://cards.scryfall.io/thumb/front/3/3/336e0a75-8104-4e88-aad0-af7ac3efc115.webp?1783937767",
+    "grid": "https://cards.scryfall.io/grid/front/3/3/336e0a75-8104-4e88-aad0-af7ac3efc115.webp?1783937767",
+    "display": "https://cards.scryfall.io/display/front/3/3/336e0a75-8104-4e88-aad0-af7ac3efc115.webp?1783937767",
+    "art": "https://cards.scryfall.io/art/front/3/3/336e0a75-8104-4e88-aad0-af7ac3efc115.webp?1783937767",
+    "crop": "https://cards.scryfall.io/crop/front/3/3/336e0a75-8104-4e88-aad0-af7ac3efc115.webp?1783937767",
+    "jpeg": "https://cards.scryfall.io/normal/front/3/3/336e0a75-8104-4e88-aad0-af7ac3efc115.jpg?1783937767"
+   }
+  },
+  {
+   "object": "card",
+   "id": "8a9c29bf-a177-40d5-9ade-129221222900",
+   "oracle_id": "a323a3af-8a74-433c-8994-707a09ef3a0c",
+   "name": "Nezumi Cutthroat",
+   "layout": "normal",
+   "mana_cost": "{1}{B}",
+   "type_line": "Creature \u2014 Rat Warrior",
+   "oracle_text": "Fear (This creature can't be blocked except by artifact creatures and/or black creatures.)\nThis creature can't block.",
+   "power": "2",
+   "toughness": "1",
+   "keywords": [
+    "Fear"
+   ],
+   "image_uris": {
+    "small": "https://cards.scryfall.io/small/front/8/a/8a9c29bf-a177-40d5-9ade-129221222900.jpg?1783935162",
+    "normal": "https://cards.scryfall.io/normal/front/8/a/8a9c29bf-a177-40d5-9ade-129221222900.jpg?1783935162",
+    "large": "https://cards.scryfall.io/large/front/8/a/8a9c29bf-a177-40d5-9ade-129221222900.jpg?1783935162",
+    "png": "https://cards.scryfall.io/png/front/8/a/8a9c29bf-a177-40d5-9ade-129221222900.png?1783935162",
+    "art_crop": "https://cards.scryfall.io/art_crop/front/8/a/8a9c29bf-a177-40d5-9ade-129221222900.jpg?1783935162",
+    "border_crop": "https://cards.scryfall.io/border_crop/front/8/a/8a9c29bf-a177-40d5-9ade-129221222900.jpg?1783935162",
+    "thumb": "https://cards.scryfall.io/thumb/front/8/a/8a9c29bf-a177-40d5-9ade-129221222900.webp?1783935162",
+    "grid": "https://cards.scryfall.io/grid/front/8/a/8a9c29bf-a177-40d5-9ade-129221222900.webp?1783935162",
+    "display": "https://cards.scryfall.io/display/front/8/a/8a9c29bf-a177-40d5-9ade-129221222900.webp?1783935162",
+    "art": "https://cards.scryfall.io/art/front/8/a/8a9c29bf-a177-40d5-9ade-129221222900.webp?1783935162",
+    "crop": "https://cards.scryfall.io/crop/front/8/a/8a9c29bf-a177-40d5-9ade-129221222900.webp?1783935162",
+    "jpeg": "https://cards.scryfall.io/normal/front/8/a/8a9c29bf-a177-40d5-9ade-129221222900.jpg?1783935162"
+   }
   }
  ]
 }

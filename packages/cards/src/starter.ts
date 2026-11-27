@@ -192,10 +192,15 @@ function costText(costs: { kind: string }[]): string {
 
 export function cardText(def: CardDef): string {
   const parts: string[] = [];
-  if (def.keywords?.length) parts.push(def.keywords.map((k) => k[0]?.toUpperCase() + k.slice(1)).join(", "));
+  if (def.keywords?.length) parts.push(def.keywords.map(keywordText).join(", "));
   for (const e of def.effects ?? []) parts.push(effectText(e));
   for (const a of def.abilities ?? []) parts.push(`${costText(a.cost)}: ${effectText(a.effect)}`);
   return parts.join(" ");
+}
+
+function keywordText(k: string): string {
+  if (k === "cant_block") return "Can't block";
+  return cap(k);
 }
 
 function cap(s: string): string {

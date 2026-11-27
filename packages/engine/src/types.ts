@@ -57,8 +57,20 @@ export interface Ability {
  * Evergreen keywords the engine understands.
  * haste: may attack the turn it enters. flying: can only be blocked by flyers.
  * vigilance: attacking doesn't tap it. deathtouch: any damage it deals is lethal.
+ * fear: can only be blocked by black creatures (artifact creatures aren't modelled).
+ * menace: can't be blocked except by two or more creatures.
+ * skulk: can't be blocked by creatures with greater power.
+ * cant_block: this creature can't block.
  */
-export type Keyword = "haste" | "flying" | "vigilance" | "deathtouch";
+export type Keyword =
+  | "haste"
+  | "flying"
+  | "vigilance"
+  | "deathtouch"
+  | "fear"
+  | "menace"
+  | "skulk"
+  | "cant_block";
 
 /** A card definition. `game` lets one engine host cards from different games. */
 export interface CardDef {
