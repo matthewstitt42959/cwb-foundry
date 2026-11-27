@@ -9,6 +9,7 @@ import {
   type CardId,
   type Effect,
   type GameState,
+  type Keyword,
   type ManaCost,
   type PlayerId,
   type Ruleset,
@@ -29,6 +30,8 @@ export function chooseAction(rules: Ruleset, state: GameState): Action {
   if (state.pending === "attackers") choice = decideAttackers(rules, state, me);
   else if (state.pending === "blockers") choice = decideBlockers(rules, state, me);
   else if (state.pending === "discard") choice = decideDiscard(rules, state, me);
+  else if (state.pending === "target") choice = decideTrigger(rules, state, me, legal);
+  else if (state.pending === "search") choice = decideSearch(rules, state, me, legal);
   else choice = decideMain(rules, state, me, legal) ?? pass;
 
   if (validateAction(rules, state, choice) === null) return choice;
@@ -56,8 +59,15 @@ function opponentOf(state: GameState, me: PlayerId): PlayerId {
   return state.order.find((p) => p !== me) as PlayerId;
 }
 
+const hasKw = (r: Ruleset, s: GameState, id: CardId, kw: Keyword) => !!defOf(r, s, id)?.keywords?.includes(kw);
+
+/** Mirrors the engine's per-pair blocking rules. Menace needs two blockers, which the AI never plans. */
 function canBlock(r: Ruleset, s: GameState, blocker: CardId, attacker: CardId): boolean {
-  return !isFlyer(r, s, attacker) || isFlyer(r, s, blocker);
+  if (hasKw(r, s, attacker, "menace")) return false;
+  if (isFlyer(r, s, attacker) && !isFlyer(r, s, blocker)) return false;
+  if (hasKw(r, s, attacker, "fear") && !((defOf(r, s, blocker)?.cost?.B ?? 0) > 0)) return false;
+  if (hasKw(r, s, attacker, "skulk") && power(r, s, blocker) > power(r, s, attacker)) return false;
+  return true;
 }
 
 // ---- attacking ------------------------------------------------------------
@@ -140,6 +150,37 @@ function decideDiscard(rules: Ruleset, state: GameState, me: PlayerId): Action {
   return { type: "DISCARD", player: me, cardIds: worst ? [worst] : [] };
 }
 
+// ---- trigger targets -----------------------------------------------------------
+
+/** Pick a target for one of our triggers: a lethal one if there is one, else anything that isn't ours. */
+function decideTrigger(rules: Ruleset, state: GameState, me: PlayerId, legal: Action[]): Action {
+  const effect = state.targeting?.effect;
+  let best: { action: Action; score: number } | null = null;
+  for (const a of legal) {
+    if (a.type !== "CHOOSE_TARGET") continue;
+    const t = a.target;
+    const owner = t.kind === "player" ? t.id : state.cards[t.id]?.owner;
+    let score = owner === me ? -100 : 0;
+    if (t.kind === "card") score += value(rules, state, t.id);
+    if (effect && t.kind === "card") score += Math.max(0, scoreAbility(rules, state, me, effect, t));
+    if (!best || score > best.score) best = { action: a, score };
+  }
+  return best?.action ?? { type: "PASS", player: me };
+}
+
+// ---- library search ------------------------------------------------------------
+
+/** Take the most valuable card the search allows. */
+function decideSearch(rules: Ruleset, state: GameState, me: PlayerId, legal: Action[]): Action {
+  let best: { action: Action; score: number } | null = null;
+  for (const a of legal) {
+    if (a.type !== "SEARCH" || a.cardId === null) continue;
+    const score = value(rules, state, a.cardId);
+    if (!best || score > best.score) best = { action: a, score };
+  }
+  return best?.action ?? { type: "SEARCH", player: me, cardId: null };
+}
+
 // ---- main phase -----------------------------------------------------------
 
 function decideMain(rules: Ruleset, state: GameState, me: PlayerId, legal: Action[]): Action | null {
@@ -151,7 +192,7 @@ function decideMain(rules: Ruleset, state: GameState, me: PlayerId, legal: Actio
     const inst = state.cards[a.cardId];
     const ability = rules.defs[inst?.defId ?? ""]?.abilities?.[a.abilityIndex];
     if (!ability) continue;
-    const score = scoreAbility(rules, state, me, ability.effect, a.targets?.[0]);
+    const score = scoreAbility(rules, state, me, ability.effect, a.targets?.[0], a.x);
     if (score > 0 && (!bestActivation || score > bestActivation.score)) bestActivation = { action: a, score };
   }
   if (bestActivation) return bestActivation.action;
@@ -175,7 +216,16 @@ function decideMain(rules: Ruleset, state: GameState, me: PlayerId, legal: Actio
     const score = scoreSpell(rules, state, me, opp, def, a, oppLife, myLife);
     if (score > 0 && (!best || score > best.score)) best = { action: a, score };
   }
-  return best?.action ?? null;
+  if (best) return best.action;
+
+  // Nothing worth casting: spend spare mana on "lose life" abilities.
+  return (
+    legal.find((a) => {
+      if (a.type !== "ACTIVATE") return false;
+      const effect = defOf(rules, state, a.cardId)?.abilities?.[a.abilityIndex]?.effect;
+      return effect?.kind === "lose_life" && effect.target === "opponent";
+    }) ?? null
+  );
 }
 
 function scoreSpell(
@@ -227,6 +277,9 @@ function scoreSpell(
       case "draw":
         bonus += e.target === "self" ? 12 : -100;
         break;
+      case "create_token":
+        bonus += 8 * e.count; // bodies on the board; worth a card, less than removal
+        break;
       case "gain_life":
         bonus += e.target === "self" ? (myLife <= 10 ? 15 : 2) : -100;
         break;
@@ -237,11 +290,41 @@ function scoreSpell(
 }
 
 /**
- * Only knows how to use one shape so far: a negative "pump" (debuff) aimed at an
- * opponent's creature, worth using if it's lethal on its own (e.g. Rabid Rats' -1/-1
- * finishing off a blocker). Anything else scores 0 (not worth activating for).
+ * Knows two shapes: a negative "pump" (debuff) aimed at an opponent's creature, worth
+ * using if it's lethal on its own (e.g. Rabid Rats' -1/-1 finishing off a blocker), and
+ * "lose life" for the opponent when it's lethal. Anything else scores 0.
  */
-function scoreAbility(rules: Ruleset, state: GameState, me: PlayerId, effect: Effect, target?: Target): number {
+function scoreAbility(
+  rules: Ruleset,
+  state: GameState,
+  me: PlayerId,
+  effect: Effect,
+  target?: Target,
+  x = 0,
+): number {
+  if (effect.kind === "damage_all") {
+    const amount = effect.amount === "x" ? x : effect.amount;
+    if (amount <= 0) return 0;
+    const opp = opponentOf(state, me);
+    const myLife = state.players[me]?.life ?? 20;
+    const oppLife = state.players[opp]?.life ?? 20;
+    if (myLife <= amount) return -1; // never kill ourselves
+    if (oppLife <= amount) return 1000; // lethal
+    // Otherwise only if the creatures we'd take out are worth more than the ones we'd lose.
+    let net = 0;
+    for (const pid of state.order) {
+      for (const id of state.players[pid]?.battlefield ?? []) {
+        if (!defOf(rules, state, id)?.types.includes("creature")) continue;
+        if (toughnessLeft(rules, state, id) > amount) continue;
+        net += pid === me ? -value(rules, state, id) : value(rules, state, id);
+      }
+    }
+    return net > 10 ? net : 0;
+  }
+  if (effect.kind === "lose_life") {
+    // Only worth interrupting everything else when it's lethal; otherwise decideMain spends spare mana on it.
+    return effect.target === "opponent" && effect.amount >= (state.players[opponentOf(state, me)]?.life ?? 20) ? 1000 : 0;
+  }
   if (effect.kind !== "pump" || effect.power > 0 || effect.toughness > 0) return 0;
   if (!target || target.kind !== "card") return 0;
   if (state.cards[target.id]?.owner === me) return -1; // never weaken our own creature

@@ -1,4 +1,4 @@
-import type { Ability, CardDef, CardType, Effect, Keyword, ManaCost } from "@cwb/engine";
+import type { Ability, CardDef, CardType, Cost, Effect, Keyword, ManaCost, Trigger } from "@cwb/engine";
 import type { ScryfallCard } from "./types";
 
 /**
@@ -11,6 +11,8 @@ import type { ScryfallCard } from "./types";
 export interface ConvertResult {
   name: string;
   def: CardDef | null;
+  /** Token definitions the card's effects create; they must be in the game's defs for the card to work. */
+  tokens?: CardDef[];
   /** Why the card can't be used. Empty when `def` is set. */
   unsupported: string[];
 }
@@ -20,10 +22,20 @@ const SUPPORTED_KEYWORDS: Record<string, Keyword> = {
   haste: "haste",
   vigilance: "vigilance",
   deathtouch: "deathtouch",
+  fear: "fear",
+  menace: "menace",
+  skulk: "skulk",
+  lifelink: "lifelink",
+  trample: "trample",
+  "first strike": "first_strike",
 };
 
 const BASIC_COLORS = ["W", "U", "B", "R", "G"] as const;
 type BasicColor = (typeof BASIC_COLORS)[number];
+
+const COLOR_OF: Record<string, BasicColor> = { white: "W", blue: "U", black: "B", red: "R", green: "G" };
+
+const CARD_TYPE_WORDS = new Set(["creature", "land", "instant", "sorcery", "artifact", "enchantment", "planeswalker"]);
 
 const SUPERTYPES = new Set(["basic", "legendary", "snow", "world", "ongoing"]);
 
@@ -65,9 +77,48 @@ function parseCount(word: string): number | null {
   return NUMBER_WORDS[word] ?? null;
 }
 
+/** Token definitions found while parsing the current card; reset by convertScryfallCard (parsing is synchronous). */
+let collectedTokens: CardDef[] = [];
+
+const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 /** Parse one clause of spell text into an effect, or null if we don't understand it. */
 function parseClause(clause: string): Effect | null {
   let m: RegExpMatchArray | null;
+  if (
+    (m = clause.match(
+      /^create (a|an|one|two|three) (\d+)\/(\d+) (?:(white|blue|black|red|green) )?([a-z]+) creature tokens?(?: with (flying|haste|vigilance|deathtouch|lifelink|first strike|trample|menace|fear|skulk))?(?: with "this token can't block\.?")?$/,
+    ))
+  ) {
+    const count = parseCount(m[1] ?? "");
+    const subtype = m[5] ?? "";
+    const keyword = m[6] ? SUPPORTED_KEYWORDS[m[6]] : undefined;
+    const cantBlock = clause.includes("can't block");
+    if (!count || CARD_TYPE_WORDS.has(subtype)) return null;
+    const color = m[4] ? COLOR_OF[m[4]] : undefined;
+    const keywords: Keyword[] = [...(keyword ? [keyword] : []), ...(cantBlock ? (["cant_block"] as Keyword[]) : [])];
+    const id = slugify(
+      ["mtg token", m[4] ?? "colorless", `${m[2]} ${m[3]}`, subtype, ...keywords].join(" "),
+    );
+    if (!collectedTokens.some((t) => t.id === id)) {
+      collectedTokens.push({
+        id,
+        game: "mtg",
+        name: titleCase(subtype),
+        types: ["creature"],
+        subtypes: [subtype],
+        colors: color ? [color] : [],
+        power: Number(m[2]),
+        toughness: Number(m[3]),
+        token: true,
+        ...(keywords.length ? { keywords } : {}),
+      });
+    }
+    const label = `${m[2]}/${m[3]} ${m[4] ?? "colorless"} ${titleCase(subtype)} creature token${
+      keyword ? ` with ${m[6]}` : cantBlock ? " that can't block" : ""
+    }`;
+    return { kind: "create_token", tokenDefId: id, count, label };
+  }
   if ((m = clause.match(/^~ deals (\d+) damage to any target$/))) {
     return { kind: "damage", amount: Number(m[1]), target: "any" };
   }
@@ -78,6 +129,18 @@ function parseClause(clause: string): Effect | null {
   if ((m = clause.match(/^~ deals (\d+) damage to (?:target opponent|target player|target player or planeswalker|each opponent)$/))) {
     return { kind: "damage", amount: Number(m[1]), target: "opponent" };
   }
+  if ((m = clause.match(/^(?:target|each) opponent loses (\w+) life$/))) {
+    const n = parseCount(m[1] ?? "");
+    return n ? { kind: "lose_life", amount: n, target: "opponent" } : null;
+  }
+  if ((m = clause.match(/^~ deals (\d+|x) damage to each creature and each player$/))) {
+    return { kind: "damage_all", amount: m[1] === "x" ? "x" : Number(m[1]) };
+  }
+  if ((m = clause.match(/^you may search your library for an? (\w+) card, reveal (?:it|that card), put (?:it|that card) into your hand, then shuffle(?: your library)?$/))) {
+    const subtype = m[1] ?? "";
+    // Only real subtypes: "creature card" or "land card" would match nothing in CardDef.subtypes.
+    return CARD_TYPE_WORDS.has(subtype) ? null : { kind: "search_library", subtype };
+  }
   if (clause === "destroy target creature") return { kind: "destroy", target: "creature" };
   if ((m = clause.match(/^you gain (\w+) life$/))) {
     const n = parseCount(m[1] ?? "");
@@ -87,7 +150,8 @@ function parseClause(clause: string): Effect | null {
     const n = parseCount(m[1] ?? "");
     return n ? { kind: "draw", amount: n, target: "self" } : null;
   }
-  if ((m = clause.match(/^target opponent discards? (\w+) cards?$/))) {
+  // Two players only, so "each opponent" is the same single player as "target opponent".
+  if ((m = clause.match(/^(?:target|each) opponent discards? (\w+) cards?$/))) {
     const n = parseCount(m[1] ?? "");
     return n ? { kind: "discard", amount: n, target: "opponent" } : null;
   }
@@ -103,12 +167,39 @@ function parseClause(clause: string): Effect | null {
   return null;
 }
 
-/** Parses a single tap-cost activated ability line, e.g. "{T}: <effect clause>.". */
+/**
+ * Parses an activated ability line: comma-separated costs ({T} and/or mana such as
+ * "{5}{B}"), a colon, then one effect clause. Any other cost (sacrifice, discard, life,
+ * X, hybrid mana...) makes the whole line unsupported.
+ */
 function parseActivatedAbility(normalizedLine: string): Ability | null {
-  const m = normalizedLine.match(/^\{t\}:\s*(.+?)\.?$/i);
+  // "Spend only black mana on X." restricts the colour of an {X} cost.
+  const restriction = normalizedLine.match(/\s*Spend only (white|blue|black|red|green) mana on X\.?$/i);
+  const only = restriction ? COLOR_OF[(restriction[1] ?? "").toLowerCase()] : undefined;
+  const line = restriction ? normalizedLine.slice(0, restriction.index).trim() : normalizedLine;
+  const m = line.match(/^([^:]+):\s*(.+?)\.?$/);
   if (!m) return null;
-  const effect = parseClause((m[1] ?? "").trim().toLowerCase());
-  return effect ? { cost: [{ kind: "tap" }], effect } : null;
+  const cost: Cost[] = [];
+  for (const part of (m[1] ?? "").split(/,\s*/)) {
+    if (/^\{t\}$/i.test(part)) {
+      cost.push({ kind: "tap" });
+    } else if (/^\{x\}$/i.test(part)) {
+      cost.push(only ? { kind: "x", only } : { kind: "x" });
+    } else if (/^(\{[^}]+\})+$/.test(part)) {
+      const { cost: mana, problems } = parseManaCost(part);
+      if (problems.length > 0) return null;
+      cost.push({ kind: "mana", cost: mana });
+    } else {
+      return null;
+    }
+  }
+  const effect = parseClause((m[2] ?? "").trim().toLowerCase());
+  if (!effect) return null;
+  // X in the cost and X in the effect must go together, or the card would run differently.
+  const hasX = cost.some((c) => c.kind === "x");
+  if (hasX !== (effect.kind === "damage_all" && effect.amount === "x")) return null;
+  if (restriction && !hasX) return null;
+  return { cost, effect };
 }
 
 function escapeRegExp(s: string): string {
@@ -154,6 +245,7 @@ function parseKeywordLine(line: string): Keyword[] | null {
 }
 
 export function convertScryfallCard(card: ScryfallCard): ConvertResult {
+  collectedTokens = [];
   const fail = (...reasons: string[]): ConvertResult => ({ name: card.name, def: null, unsupported: reasons });
 
   if (card.layout !== "normal") {
@@ -190,6 +282,8 @@ export function convertScryfallCard(card: ScryfallCard): ConvertResult {
     types: [cardType],
   };
   if (card.image_uris?.normal) base.imageUrl = card.image_uris.normal;
+  const subtypes = (typeLine.split("—")[1] ?? "").split(/\s+/).filter(Boolean).map((w) => w.toLowerCase());
+  if (subtypes.length > 0) base.subtypes = subtypes;
 
   if (cardType === "land") {
     const produced = card.produced_mana ?? [];
@@ -209,7 +303,9 @@ export function convertScryfallCard(card: ScryfallCard): ConvertResult {
   base.cost = cost;
 
   if (cardType === "creature") {
-    const power = /^\d+$/.test(card.power ?? "") ? Number(card.power) : null;
+    // "*" power is fine if the text defines it ("~'s power is equal to the number of Rats you control").
+    const starPower = card.power === "*";
+    const power = starPower ? 0 : /^\d+$/.test(card.power ?? "") ? Number(card.power) : null;
     const toughness = /^\d+$/.test(card.toughness ?? "") ? Number(card.toughness) : null;
     if (power === null || toughness === null || toughness < 1) {
       reasons.push(`Power/toughness "${card.power}/${card.toughness}" isn't supported (variable or zero toughness)`);
@@ -220,6 +316,7 @@ export function convertScryfallCard(card: ScryfallCard): ConvertResult {
     const keywords: Keyword[] = [];
     const etbEffects: Effect[] = [];
     const abilities: Ability[] = [];
+    const triggers: Trigger[] = [];
     const escapedName = escapeRegExp(card.name);
     for (const line of text.split("\n").map(stripReminderText).filter(Boolean)) {
       const normalized = line.replace(new RegExp(escapedName, "gi"), "~").replace(/\bthis creature\b/gi, "~");
@@ -231,9 +328,33 @@ export function convertScryfallCard(card: ScryfallCard): ConvertResult {
         continue;
       }
 
+      const trig = normalized.match(/^(?:when(?:ever)? ~ (dies|attacks)|at the beginning of your (upkeep)),\s*(.+?)\.?$/i);
+      const trigEffect = trig ? parseClause((trig[3] ?? "").trim().toLowerCase()) : null;
+      if (trig && trigEffect) {
+        const on = (trig[1] ?? trig[2] ?? "").toLowerCase();
+        triggers.push({ on: on === "dies" ? "dies" : on === "attacks" ? "attacks" : "upkeep", effect: trigEffect });
+        continue;
+      }
+
+      const pf = normalized.match(/^~'s power is equal to the number of (other )?([a-z]+) (you control|on the battlefield)\.?$/i);
+      if (pf) {
+        const plural = (pf[2] ?? "").toLowerCase();
+        const subtype = /^[a-z]+s$/.test(plural) && !/(ves|ies|ses|xes)$/.test(plural) ? plural.slice(0, -1) : "";
+        const scope = !pf[1] && pf[3] === "you control" ? "yours" : pf[1] && pf[3] === "on the battlefield" ? "others" : null;
+        if (subtype && scope) {
+          base.powerFrom = { subtype, scope };
+          continue;
+        }
+      }
+
       const ability = parseActivatedAbility(normalized);
       if (ability) {
         abilities.push(ability);
+        continue;
+      }
+
+      if (/^~ can't block\.?$/i.test(normalized)) {
+        keywords.push("cant_block");
         continue;
       }
 
@@ -241,14 +362,19 @@ export function convertScryfallCard(card: ScryfallCard): ConvertResult {
       if (kws) keywords.push(...kws);
       else reasons.push(`Ability "${line}" isn't supported yet`);
     }
+    if (starPower && !base.powerFrom) {
+      reasons.push(`Power/toughness "${card.power}/${card.toughness}" isn't supported (variable or zero toughness)`);
+    }
     if (keywords.length) base.keywords = [...new Set(keywords)];
     if (etbEffects.length) base.effects = etbEffects;
     if (abilities.length) base.abilities = abilities;
+    if (triggers.length) base.triggers = triggers;
   } else {
     const { effects, problems: textProblems } = parseSpellText(text, card.name);
     reasons.push(...textProblems);
     if (effects.length) base.effects = effects;
   }
 
-  return reasons.length ? fail(...reasons) : { name: card.name, def: base, unsupported: [] };
+  if (reasons.length) return fail(...reasons);
+  return { name: card.name, def: base, unsupported: [], ...(collectedTokens.length ? { tokens: collectedTokens } : {}) };
 }

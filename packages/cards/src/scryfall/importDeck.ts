@@ -65,6 +65,7 @@ export async function importDecklist(
       skippedCount += entry.count;
     } else {
       defs[result.def.id] = result.def;
+      for (const token of result.tokens ?? []) defs[token.id] = token;
       for (let i = 0; i < entry.count; i++) cards.push(result.def.id);
       rows.push({ name: result.name, count: entry.count, status: "ok", reasons: [] });
       playableCount += entry.count;

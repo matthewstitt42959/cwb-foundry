@@ -28,7 +28,7 @@ const IMPORTED = "imported";
  * otherwise cards already cached as "unsupported" stay that way forever, even after
  * the engine learns to run them.
  */
-const CACHE_KEY = "cwb:scryfall-cache:v2";
+const CACHE_KEY = "cwb:scryfall-cache:v3";
 const MIN_IMPORT_CARDS = 10;
 /** Prefix for deck-picker values that point at a saved decklist. */
 const SAVED = "saved:";

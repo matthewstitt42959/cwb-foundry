@@ -8,8 +8,9 @@ import raw from "../../cards/test/fixtures/scryfall-collection.json";
 const fixture = raw as unknown as ScryfallCollectionResponse;
 const defs: CardDefs = {};
 for (const card of fixture.data) {
-  const { def } = convertScryfallCard(card);
+  const { def, tokens } = convertScryfallCard(card);
   if (def) defs[def.id] = def;
+  for (const token of tokens ?? []) defs[token.id] = token;
 }
 const rules: Ruleset = { pack: mtgPack, defs };
 
@@ -24,9 +25,27 @@ const imported = deck({
   mtg_shock: 3,
   mtg_lava_axe: 2,
   mtg_lightning_helix: 3,
-  mtg_grizzly_bears: 7,
+  mtg_grizzly_bears: 5,
+  mtg_raise_the_alarm: 2,
   mtg_serra_angel: 2,
   mtg_hill_giant: 3,
+});
+
+// Black deck exercising abilities, triggers and the evasion/combat keywords end to end.
+const rats = deck({
+  mtg_swamp: 16,
+  mtg_typhoid_rats: 2,
+  mtg_rabid_rats: 2,
+  mtg_crypt_rats: 3,
+  mtg_ratcatcher: 2,
+  mtg_swarm_of_rats: 2,
+  mtg_pestilence_rats: 2,
+  mtg_elephant_rat: 2,
+  mtg_razortooth_rats: 2,
+  mtg_rancid_rats: 1,
+  mtg_nezumi_cutthroat: 2,
+  mtg_engine_rat: 2,
+  mtg_disease_carriers: 2,
 });
 
 describe("imported cards run in the real engine", () => {
@@ -38,6 +57,7 @@ describe("imported cards run in the real engine", () => {
   it("AI plays 30 full games with imported cards, never choosing an illegal action", () => {
     const winners = new Set<string | null>();
     let helixCast = 0;
+    let tokensMade = 0;
     for (let seed = 1; seed <= 30; seed++) {
       let state = createGame(rules, { decks: { p1: imported, p2: imported }, seed });
       for (let i = 0; i < 4000 && !state.over; i++) {
@@ -49,8 +69,34 @@ describe("imported cards run in the real engine", () => {
       expect(state.over, `seed ${seed} didn't finish`).toBe(true);
       winners.add(state.winner);
       helixCast += state.log.filter((l) => l === "Lightning Helix resolves").length;
+      tokensMade += state.log.filter((l) => l.includes("creates 2 1/1 white Soldier creature tokens")).length;
     }
     expect(winners.has("p1") && winners.has("p2")).toBe(true);
     expect(helixCast).toBeGreaterThan(0); // compound spells actually get cast
+    expect(tokensMade).toBeGreaterThan(0); // token spells too
+  });
+
+  it("AI plays 30 full games with a Rat deck (abilities, triggers, keywords) without an illegal action", () => {
+    expect(rats).toHaveLength(40);
+    for (const id of rats) expect(defs[id], id).toBeDefined();
+    let triggers = 0;
+    let sweeps = 0;
+    let searches = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      let state = createGame(rules, { decks: { p1: rats, p2: rats }, seed });
+      for (let i = 0; i < 6000 && !state.over; i++) {
+        const action = chooseAction(rules, state);
+        const r = applyAction(rules, state, action);
+        if (!r.ok) throw new Error(`seed ${seed}: illegal action (${r.error}): ${JSON.stringify(action)}`);
+        state = r.state;
+      }
+      expect(state.over, `seed ${seed} didn't finish`).toBe(true);
+      triggers += state.log.filter((l) => l.endsWith("'s ability triggers")).length;
+      searches += state.log.filter((l) => l.includes("puts it into their hand, and shuffles")).length;
+      sweeps += state.log.filter((l) => l.endsWith("damage is dealt to each creature and each player")).length;
+    }
+    expect(triggers).toBeGreaterThan(0);
+    expect(sweeps).toBeGreaterThan(0); // the AI does use Crypt Rats
+    expect(searches).toBeGreaterThan(0); // and Ratcatcher finds Rats
   });
 });

@@ -319,6 +319,252 @@ describe("activated abilities", () => {
   });
 });
 
+describe("abilities with mana costs", () => {
+  function withPinger() {
+    let s = passUntilPhase(newGame(), "main1");
+    const p = give(s, "p1", "pinger", "battlefield");
+    const m = give(p.state, "p1", "mountain", "battlefield");
+    return { s: m.state, pinger: p.id, mountain: m.id };
+  }
+
+  it("pays mana by tapping a land, then resolves like any other ability", () => {
+    const { s, pinger, mountain } = withPinger();
+    let g = ok(s, { type: "ACTIVATE", player: "p1", cardId: pinger, abilityIndex: 0 });
+    expect(g.cards[mountain]?.tapped).toBe(true);
+    expect(g.cards[pinger]?.tapped).toBe(false); // no {T} in the cost
+    g = ok(g, { type: "PASS", player: "p1" });
+    g = ok(g, { type: "PASS", player: "p2" });
+    expect(g.players.p2?.life).toBe(18);
+  });
+
+  it("is rejected, and not offered, when the mana can't be paid", () => {
+    const { s, pinger, mountain } = withPinger();
+    const tapped = clone(s);
+    (tapped.cards[mountain] as { tapped: boolean }).tapped = true;
+    expect(applyAction(rules, tapped, { type: "ACTIVATE", player: "p1", cardId: pinger, abilityIndex: 0 })).toEqual({
+      ok: false,
+      error: "Cannot pay the cost",
+    });
+    expect(getLegalActions(rules, tapped).some((a) => a.type === "ACTIVATE")).toBe(false);
+    expect(getLegalActions(rules, s).some((a) => a.type === "ACTIVATE")).toBe(true);
+  });
+});
+
+describe("discard spells", () => {
+  it("a discard sorcery resolves, then the opponent chooses what to discard", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const mind = give(s, "p1", "mind", "hand");
+    s = ok(mind.state, { type: "CAST", player: "p1", cardId: mind.id });
+    s = ok(ok(s, { type: "PASS", player: "p1" }), { type: "PASS", player: "p2" });
+    expect(s.pending).toBe("discard");
+    expect(s.discard).toEqual({ player: "p2", count: 1 });
+    expect(s.players.p1?.graveyard).toContain(mind.id);
+  });
+});
+
+describe("library searches and upkeep triggers", () => {
+  /** p1 has a scout in play and the given cards in their library; returns the state once the upkeep trigger is on the stack. */
+  function atUpkeepTrigger(libraryDefs: string[]) {
+    let s = passUntilPhase(newGame(), "main1");
+    s = give(s, "p1", "scout", "battlefield").state;
+    const ids: string[] = [];
+    for (const d of libraryDefs) {
+      const g = give(s, "p1", d, "hand");
+      s = clone(g.state);
+      const p1 = s.players.p1 as { hand: string[]; library: string[] };
+      p1.hand = p1.hand.filter((id) => id !== g.id);
+      p1.library.push(g.id);
+      ids.push(g.id);
+    }
+    for (let i = 0; i < 80 && s.stack.length === 0; i++) {
+      s = s.pending
+        ? ok(s, { type: "DECLARE_ATTACKERS", player: s.priority, attackers: [] })
+        : ok(s, { type: "PASS", player: s.priority });
+    }
+    return { s, ids };
+  }
+  const resolve = (s: GameState) => ok(ok(s, { type: "PASS", player: "p1" }), { type: "PASS", player: "p2" });
+
+  it("fires at the start of its controller's own upkeep, then asks them to choose", () => {
+    const { s } = atUpkeepTrigger(["ratling", "ratling", "bear"]);
+    expect(s.activePlayer).toBe("p1");
+    expect(rules.pack.phases[s.phaseIndex]?.id).toBe("upkeep");
+    expect(s.stack[0]).toMatchObject({ kind: "ability", effect: { kind: "search_library", subtype: "rat" } });
+    const g = resolve(s);
+    expect(g.pending).toBe("search");
+    expect(g.priority).toBe("p1");
+    // One option per distinct card (two identical ratlings count once), the non-rat is excluded, and declining is allowed.
+    const options = getLegalActions(rules, g);
+    expect(options).toHaveLength(2);
+    expect(options).toContainEqual({ type: "SEARCH", player: "p1", cardId: null });
+  });
+
+  it("taking a card moves it to hand and shuffles", () => {
+    const { s, ids } = atUpkeepTrigger(["ratling", "bear"]);
+    const before = s.players.p1?.library.length ?? 0;
+    let g = resolve(s);
+    g = ok(g, { type: "SEARCH", player: "p1", cardId: ids[0] as string });
+    expect(g.pending).toBeNull();
+    expect(g.players.p1?.hand).toContain(ids[0]);
+    expect(g.players.p1?.library).toHaveLength(before - 1);
+    expect(g.log.some((l) => l.includes("shuffles"))).toBe(true);
+  });
+
+  it("declining leaves the library alone", () => {
+    const { s } = atUpkeepTrigger(["ratling"]);
+    const before = s.players.p1?.library.length ?? 0;
+    let g = resolve(s);
+    g = ok(g, { type: "SEARCH", player: "p1", cardId: null });
+    expect(g.pending).toBeNull();
+    expect(g.players.p1?.library).toHaveLength(before);
+  });
+
+  it("rejects a card that doesn't match the subtype", () => {
+    const { s, ids } = atUpkeepTrigger(["ratling", "bear"]);
+    const g = resolve(s);
+    expect(validateAction(rules, g, { type: "SEARCH", player: "p1", cardId: ids[1] as string })).toBe(
+      "That card can't be taken",
+    );
+  });
+
+  it("does nothing when the library has no matching card", () => {
+    const { s } = atUpkeepTrigger(["bear"]);
+    const g = resolve(s);
+    expect(g.pending).toBeNull();
+    expect(g.log.some((l) => l.includes("finds no rat card"))).toBe(true);
+  });
+});
+
+describe("X costs and damage to everything", () => {
+  function withSweeper(mountains: number, forests = 0) {
+    let s = passUntilPhase(newGame(), "main1");
+    const sw = give(s, "p1", "sweeper", "battlefield");
+    s = sw.state;
+    for (let i = 0; i < mountains; i++) s = give(s, "p1", "mountain", "battlefield").state;
+    for (let i = 0; i < forests; i++) s = give(s, "p1", "forest", "battlefield").state;
+    const bear = give(s, "p2", "bear", "battlefield");
+    const giant = give(bear.state, "p2", "giant", "battlefield");
+    return { s: giant.state, sweeper: sw.id, bear: bear.id, giant: giant.id };
+  }
+
+  it("offers each affordable X, and paying it taps that many lands", () => {
+    const { s, sweeper } = withSweeper(3);
+    const xs = getLegalActions(rules, s).flatMap((a) => (a.type === "ACTIVATE" ? [a.x] : []));
+    expect(xs).toEqual([1, 2, 3]);
+    const g = ok(s, { type: "ACTIVATE", player: "p1", cardId: sweeper, abilityIndex: 0, x: 2 });
+    expect(g.players.p1?.battlefield.filter((id) => g.cards[id]?.tapped)).toHaveLength(2);
+    expect(g.stack[0]).toMatchObject({ kind: "ability", x: 2 });
+  });
+
+  it("deals X to every creature and every player, including its own side", () => {
+    const { s, sweeper, bear, giant } = withSweeper(2);
+    let g = ok(s, { type: "ACTIVATE", player: "p1", cardId: sweeper, abilityIndex: 0, x: 2 });
+    g = ok(ok(g, { type: "PASS", player: "p1" }), { type: "PASS", player: "p2" });
+    expect(g.players.p1?.life).toBe(18);
+    expect(g.players.p2?.life).toBe(18);
+    expect(g.players.p2?.graveyard).toContain(bear); // 2/2 dies
+    expect(g.players.p2?.battlefield).toContain(giant); // 4/4 survives with 2 damage
+    expect(g.cards[giant]?.damage).toBe(2);
+    expect(g.players.p1?.graveyard).toContain(sweeper); // the source is a creature too
+  });
+
+  it("only the allowed colour can pay X", () => {
+    const { s } = withSweeper(0, 3); // forests only; X must be red
+    expect(getLegalActions(rules, s).some((a) => a.type === "ACTIVATE")).toBe(false);
+  });
+
+  it("requires X for an X ability and rejects X for any other", () => {
+    const { s, sweeper } = withSweeper(2);
+    expect(validateAction(rules, s, { type: "ACTIVATE", player: "p1", cardId: sweeper, abilityIndex: 0 })).toBe(
+      "Choose a value for X",
+    );
+    expect(validateAction(rules, s, { type: "ACTIVATE", player: "p1", cardId: sweeper, abilityIndex: 0, x: 5 })).toBe(
+      "Cannot pay the cost",
+    );
+    let t = passUntilPhase(newGame(), "main1");
+    const pinger = give(t, "p1", "pinger", "battlefield");
+    t = give(pinger.state, "p1", "mountain", "battlefield").state;
+    expect(validateAction(rules, t, { type: "ACTIVATE", player: "p1", cardId: pinger.id, abilityIndex: 0, x: 1 })).toBe(
+      "This ability has no X",
+    );
+  });
+});
+
+describe("triggered abilities", () => {
+  /** p1's attacker is blocked by each listed p2 creature in turn; returns the state at combat damage. */
+  function combat(attacker: string, blockers: string[]) {
+    let s = passUntilPhase(newGame(), "main1");
+    const a = give(s, "p1", attacker, "battlefield");
+    s = a.state;
+    const bs: string[] = [];
+    for (const b of blockers) {
+      const g = give(s, "p2", b, "battlefield");
+      s = g.state;
+      bs.push(g.id);
+    }
+    s = passUntilPhase(s, "attackers");
+    s = ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [a.id] });
+    s = ok(ok(s, { type: "PASS", player: "p1" }), { type: "PASS", player: "p2" });
+    return { s, a: a.id, bs };
+  }
+  const passRound = (s: GameState) => {
+    const once = ok(s, { type: "PASS", player: s.priority });
+    return ok(once, { type: "PASS", player: once.priority });
+  };
+
+  it("a dies trigger with a single legal target goes on the stack on its own and resolves", () => {
+    const { s, a, bs } = combat("martyr", ["giant"]);
+    const [giant] = bs as [string];
+    let g = ok(s, { type: "DECLARE_BLOCKERS", player: "p2", blocks: [{ blocker: giant, attacker: a }] });
+    g = passRound(g); // combat damage: the martyr dies
+    expect(g.players.p1?.graveyard).toContain(a);
+    expect(g.stack).toHaveLength(1);
+    expect(g.stack[0]).toMatchObject({ kind: "ability", controller: "p1", targets: [{ kind: "card", id: giant }] });
+    g = passRound(g);
+    expect(g.stack).toHaveLength(0);
+    expect(g.cards[giant]?.tempPower).toBe(-2);
+  });
+
+  it("asks the controller to choose when a trigger has several legal targets", () => {
+    const { s, a, bs } = combat("martyr", ["bear", "giant"]);
+    const [bear, giant] = bs as [string, string];
+    let g = ok(s, { type: "DECLARE_BLOCKERS", player: "p2", blocks: [{ blocker: bear, attacker: a }] });
+    g = passRound(g);
+    expect(g.pending).toBe("target");
+    expect(g.priority).toBe("p1");
+    expect(g.stack).toHaveLength(0);
+    expect(getLegalActions(rules, g)).toEqual([
+      { type: "CHOOSE_TARGET", player: "p1", target: { kind: "card", id: bear } },
+      { type: "CHOOSE_TARGET", player: "p1", target: { kind: "card", id: giant } },
+    ]);
+    expect(applyAction(rules, g, { type: "CHOOSE_TARGET", player: "p2", target: { kind: "card", id: giant } })).toEqual({
+      ok: false,
+      error: "Waiting for the other player to declare",
+    });
+    expect(applyAction(rules, g, { type: "PASS", player: "p1" })).toEqual({ ok: false, error: "Choose a target first" });
+    expect(applyAction(rules, g, { type: "CHOOSE_TARGET", player: "p1", target: { kind: "player", id: "p2" } })).toEqual({
+      ok: false,
+      error: "Invalid target",
+    });
+    g = ok(g, { type: "CHOOSE_TARGET", player: "p1", target: { kind: "card", id: giant } });
+    expect(g.pending).toBeNull();
+    expect(g.stack).toHaveLength(1);
+    g = passRound(g);
+    expect(g.cards[giant]?.tempPower).toBe(-2);
+  });
+
+  it("an attack trigger goes on the stack when attackers are declared", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const r = give(s, "p1", "raider", "battlefield");
+    s = passUntilPhase(r.state, "attackers");
+    s = ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [r.id] });
+    expect(s.stack).toHaveLength(1);
+    expect(s.priority).toBe("p1");
+    s = ok(ok(s, { type: "PASS", player: "p1" }), { type: "PASS", player: "p2" });
+    expect(s.players.p2?.life).toBe(19);
+  });
+});
+
 describe("purity and legal actions", () => {
   it("never mutates the input state, even on illegal actions", () => {
     const s = newGame();

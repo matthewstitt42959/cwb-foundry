@@ -1,3 +1,4 @@
+import { queueTriggers } from "./triggers";
 import type { CardId, Effect, GameState, PlayerId, Ruleset, Target } from "./types";
 
 export function opponentOf(state: GameState, player: PlayerId): PlayerId {
@@ -39,13 +40,13 @@ export function checkState(state: GameState): void {
 }
 
 /** Move a permanent from the battlefield to its owner's graveyard. */
-export function putInGraveyard(state: GameState, cardId: CardId): void {
+export function putInGraveyard(rules: Ruleset, state: GameState, cardId: CardId): void {
   for (const pid of state.order) {
     const p = state.players[pid];
     if (p?.battlefield.includes(cardId)) p.battlefield = p.battlefield.filter((id) => id !== cardId);
   }
   const inst = state.cards[cardId];
-  if (inst) state.players[inst.owner]?.graveyard.push(cardId);
+  if (inst && !rules.defs[inst.defId]?.token) state.players[inst.owner]?.graveyard.push(cardId);
 }
 
 /**
@@ -58,6 +59,7 @@ export function applyEffect(
   effect: Effect,
   controller: PlayerId,
   targets: Target[],
+  x = 0,
 ): void {
   const name = (id: CardId) => {
     const inst = state.cards[id];
@@ -68,7 +70,8 @@ export function applyEffect(
     const t = targets[0];
     if (t?.kind === "card") {
       state.log.push(`${name(t.id)} is destroyed`);
-      putInGraveyard(state, t.id);
+      putInGraveyard(rules, state, t.id);
+      queueTriggers(rules, state, t.id, "dies");
     }
     return;
   }
@@ -83,6 +86,41 @@ export function applyEffect(
       const p = state.players[t.id];
       if (p) p.life -= effect.amount;
       state.log.push(`${t.id} takes ${effect.amount} damage`);
+    }
+    return;
+  }
+
+  if (effect.kind === "create_token") {
+    const def = rules.defs[effect.tokenDefId];
+    const p = state.players[controller];
+    if (!def || !p) return;
+    for (let i = 0; i < effect.count; i++) {
+      const id = `${controller}:token${state.tokens++}`;
+      state.cards[id] = { id, defId: def.id, owner: controller, tapped: false, damage: 0, enteredTurn: state.turn };
+      p.battlefield.push(id);
+    }
+    state.log.push(`${controller} creates ${effect.count === 1 ? "a" : effect.count} ${effect.label}${effect.count === 1 ? "" : "s"}`);
+    return;
+  }
+
+  if (effect.kind === "search_library") {
+    // The searching player chooses (or declines), so resolveTop must start a pending search.
+    throw new Error("search effects must be resolved by resolveTop, not applyEffect");
+  }
+
+  if (effect.kind === "damage_all") {
+    const amount = effect.amount === "x" ? x : effect.amount;
+    if (amount > 0) {
+      for (const pid of state.order) {
+        const p = state.players[pid];
+        if (!p) continue;
+        for (const id of p.battlefield) {
+          const inst = state.cards[id];
+          if (inst && rules.defs[inst.defId]?.types.includes("creature")) inst.damage += amount;
+        }
+        p.life -= amount;
+      }
+      state.log.push(`${amount} damage is dealt to each creature and each player`);
     }
     return;
   }
@@ -107,6 +145,10 @@ export function applyEffect(
     case "damage":
       p.life -= effect.amount;
       state.log.push(`${who} takes ${effect.amount} damage`);
+      break;
+    case "lose_life":
+      p.life -= effect.amount;
+      state.log.push(`${who} loses ${effect.amount} life`);
       break;
     case "gain_life":
       p.life += effect.amount;

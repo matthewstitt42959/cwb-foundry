@@ -13,7 +13,7 @@ export const mtgPack: RulePack = {
   drawOnFirstTurn: false,
   phases: [
     { id: "untap", name: "Untap", hasPriority: false, onEnter: "untap" },
-    { id: "upkeep", name: "Upkeep", hasPriority: true },
+    { id: "upkeep", name: "Upkeep", hasPriority: true, onEnter: "upkeep" },
     { id: "draw", name: "Draw", hasPriority: true, onEnter: "draw" },
     { id: "main1", name: "First main", hasPriority: true, main: true },
     { id: "attackers", name: "Declare attackers", hasPriority: true, onEnter: "declare_attackers" },

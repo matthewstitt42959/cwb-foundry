@@ -1,4 +1,4 @@
-import type { CardDef, CardDefs, Color, Effect, ManaCost } from "@cwb/engine";
+import type { CardDef, CardDefs, Color, Cost, Effect, ManaCost } from "@cwb/engine";
 
 /**
  * Starter set. Names and numbers are original to this project.
@@ -172,6 +172,14 @@ function effectText(e: Effect): string {
       return `${cap(who(e.target))} gain${e.target === "self" ? "" : "s"} ${e.amount} life.`;
     case "destroy":
       return "Destroy target creature.";
+    case "create_token":
+      return `Create ${e.count === 1 ? "a" : e.count} ${e.label}${e.count === 1 ? "" : "s"}.`;
+    case "search_library":
+      return `Search your library for a ${cap(e.subtype)} card, reveal it, put it into your hand, then shuffle.`;
+    case "damage_all":
+      return `Deal ${e.amount === "x" ? "X" : e.amount} damage to each creature and each player.`;
+    case "lose_life":
+      return `${cap(who(e.target))} lose${e.target === "self" ? "" : "s"} ${e.amount} life.`;
     case "discard":
       return `${cap(who(e.target))} discard${e.target === "self" ? "" : "s"} ${e.amount} card${e.amount === 1 ? "" : "s"}.`;
     case "pump": {
@@ -186,16 +194,42 @@ function effectText(e: Effect): string {
   }
 }
 
-function costText(costs: { kind: string }[]): string {
-  return costs.map((c) => (c.kind === "tap" ? "{T}" : c.kind)).join(", ");
+function costText(costs: Cost[]): string {
+  return costs
+    .map((c) => {
+      if (c.kind === "tap") return "{T}";
+      if (c.kind === "x") return c.only ? `{X} (only {${c.only}})` : "{X}";
+      const generic = c.cost.generic ? `{${c.cost.generic}}` : "";
+      return generic + (["W", "U", "B", "R", "G"] as const).map((k) => `{${k}}`.repeat(c.cost[k] ?? 0)).join("");
+    })
+    .join(", ");
 }
 
 export function cardText(def: CardDef): string {
   const parts: string[] = [];
-  if (def.keywords?.length) parts.push(def.keywords.map((k) => k[0]?.toUpperCase() + k.slice(1)).join(", "));
+  if (def.keywords?.length) parts.push(def.keywords.map(keywordText).join(", "));
   for (const e of def.effects ?? []) parts.push(effectText(e));
   for (const a of def.abilities ?? []) parts.push(`${costText(a.cost)}: ${effectText(a.effect)}`);
+  for (const t of def.triggers ?? []) {
+    const lead =
+      t.on === "dies"
+        ? "When this creature dies,"
+        : t.on === "attacks"
+          ? "Whenever this creature attacks,"
+          : "At the beginning of your upkeep,";
+    parts.push(`${lead} ${lower(effectText(t.effect))}`);
+  }
   return parts.join(" ");
+}
+
+function keywordText(k: string): string {
+  if (k === "cant_block") return "Can't block";
+  if (k === "first_strike") return "First strike";
+  return cap(k);
+}
+
+function lower(s: string): string {
+  return s.charAt(0).toLowerCase() + s.slice(1);
 }
 
 function cap(s: string): string {

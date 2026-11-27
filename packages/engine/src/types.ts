@@ -34,6 +34,13 @@ export type Effect =
   | { kind: "gain_life"; amount: number; target: PlayerTargetSpec }
   | { kind: "destroy"; target: "creature" }
   | { kind: "discard"; amount: number; target: PlayerTargetSpec }
+  | { kind: "lose_life"; amount: number; target: PlayerTargetSpec }
+  /** Damage to every creature and every player (the controller's side included). "x" reads the ability's X. */
+  | { kind: "damage_all"; amount: number | "x" }
+  /** "You may search your library for a <subtype> card, reveal it, put it into your hand, then shuffle." */
+  | { kind: "search_library"; subtype: string }
+  /** Creates `count` tokens of `tokenDefId` (a CardDef with `token: true`) under the controller's control. */
+  | { kind: "create_token"; tokenDefId: DefId; count: number; label: string }
   | { kind: "pump"; power: number; toughness: number; target: ChosenTargetSpec; duration: "until_end_of_turn" };
 
 /** A target picked when a spell is cast. */
@@ -42,14 +49,34 @@ export type Target = { kind: "player"; id: PlayerId } | { kind: "card"; id: Card
 export type CardType = "land" | "creature" | "instant" | "sorcery";
 
 /**
- * What an activated ability costs. A single kind today ("tap" the source); more
- * (sacrifice, discard, mana) slot in here later without touching anything that
- * already works. `Ability.cost` is an array since real costs can combine several.
+ * What an activated ability costs: "tap" the source and/or pay mana. More kinds
+ * (sacrifice, discard, life) slot in here later without touching anything that
+ * already works. `Ability.cost` is an array since real costs combine several.
  */
-export type Cost = { kind: "tap" };
+export type Cost =
+  | { kind: "tap" }
+  | { kind: "mana"; cost: ManaCost }
+  /** Pay X mana, chosen on activation; `only` restricts it to one colour ("spend only black mana on X"). */
+  | { kind: "x"; only?: Color };
 
 export interface Ability {
   cost: Cost[];
+  effect: Effect;
+}
+
+/** Events a triggered ability can listen for on its own creature. */
+export type TriggerEvent = "dies" | "attacks" | "upkeep";
+
+/** "When this dies, ..." / "Whenever this attacks, ...": goes on the stack when the event happens. */
+export interface Trigger {
+  on: TriggerEvent;
+  effect: Effect;
+}
+
+/** A trigger that has fired but isn't on the stack yet (it may still need a target chosen). */
+export interface PendingTrigger {
+  sourceId: CardId;
+  controller: PlayerId;
   effect: Effect;
 }
 
@@ -57,8 +84,26 @@ export interface Ability {
  * Evergreen keywords the engine understands.
  * haste: may attack the turn it enters. flying: can only be blocked by flyers.
  * vigilance: attacking doesn't tap it. deathtouch: any damage it deals is lethal.
+ * fear: can only be blocked by black creatures (artifact creatures aren't modelled).
+ * menace: can't be blocked except by two or more creatures.
+ * skulk: can't be blocked by creatures with greater power.
+ * cant_block: this creature can't block.
+ * lifelink: combat damage it deals also gains its controller that much life.
+ * first_strike: deals combat damage before creatures without it.
+ * trample: lethal damage to its blockers, the rest goes to the defending player.
  */
-export type Keyword = "haste" | "flying" | "vigilance" | "deathtouch";
+export type Keyword =
+  | "haste"
+  | "flying"
+  | "vigilance"
+  | "deathtouch"
+  | "fear"
+  | "menace"
+  | "skulk"
+  | "cant_block"
+  | "lifelink"
+  | "first_strike"
+  | "trample";
 
 /** A card definition. `game` lets one engine host cards from different games. */
 export interface CardDef {
@@ -66,6 +111,18 @@ export interface CardDef {
   game: string;
   name: string;
   types: CardType[];
+  /** Lowercase subtypes from the type line after the dash ("rat", "ogre", "swamp"...). */
+  subtypes?: string[];
+  /** Explicit colours, for cards with no mana cost to read them from (tokens). */
+  colors?: Color[];
+  /** A token: created by an effect rather than drawn, and it ceases to exist instead of going to the graveyard. */
+  token?: boolean;
+  /**
+   * Power isn't fixed: it equals the number of permanents with `subtype` ("yours" counts the ones
+   * its controller has, itself included; "others" counts every other one on the battlefield).
+   * `power` is then just a placeholder.
+   */
+  powerFrom?: { subtype: string; scope: "yours" | "others" };
   cost?: ManaCost;
   /** Colour of mana produced when a land is tapped. */
   produces?: Color;
@@ -74,6 +131,7 @@ export interface CardDef {
   keywords?: Keyword[];
   effects?: Effect[];
   abilities?: Ability[];
+  triggers?: Trigger[];
   /** Optional card image for UIs (e.g. from an importer). The engine never reads it. */
   imageUrl?: string;
 }
@@ -82,6 +140,7 @@ export type CardDefs = Record<DefId, CardDef>;
 
 export type PhaseHook =
   | "untap"
+  | "upkeep"
   | "draw"
   | "declare_attackers"
   | "declare_blockers"
@@ -154,7 +213,7 @@ export interface CombatState {
  */
 export type StackItem =
   | { kind: "spell"; cardId: CardId; controller: PlayerId; targets: Target[] }
-  | { kind: "ability"; sourceId: CardId; controller: PlayerId; effect: Effect; targets: Target[] };
+  | { kind: "ability"; sourceId: CardId; controller: PlayerId; effect: Effect; targets: Target[]; x?: number };
 
 export interface GameState {
   packId: string;
@@ -170,11 +229,19 @@ export interface GameState {
   passes: number;
   stack: StackItem[];
   combat: CombatState | null;
-  /** Set while a player must declare attackers/blockers, or choose a card to discard. */
-  pending: "attackers" | "blockers" | "discard" | null;
+  /** Set while a player must declare attackers/blockers, choose a card to discard, or pick a trigger's target. */
+  pending: "attackers" | "blockers" | "discard" | "target" | "search" | null;
+  /** Triggers that have fired and are waiting to go on the stack, in order. */
+  triggers: PendingTrigger[];
+  /** Set while `pending` is "search": who is searching their library, and for which subtype. */
+  search: { player: PlayerId; subtype: string } | null;
+  /** Set while `pending` is "target": whose trigger needs a target, and what it does. */
+  targeting: { player: PlayerId; sourceId: CardId; effect: Effect } | null;
   /** Set while `pending` is "discard": who must discard, and how many cards. */
   discard: { player: PlayerId; count: number } | null;
   rngState: number;
+  /** How many tokens have been created, so each gets a unique id. */
+  tokens: number;
   over: boolean;
   winner: PlayerId | null;
   log: string[];
@@ -187,7 +254,10 @@ export type Action =
   | { type: "DECLARE_ATTACKERS"; player: PlayerId; attackers: CardId[] }
   | { type: "DECLARE_BLOCKERS"; player: PlayerId; blocks: BlockAssignment[] }
   | { type: "DISCARD"; player: PlayerId; cardIds: CardId[] }
-  | { type: "ACTIVATE"; player: PlayerId; cardId: CardId; abilityIndex: number; targets?: Target[] }
+  | { type: "ACTIVATE"; player: PlayerId; cardId: CardId; abilityIndex: number; targets?: Target[]; x?: number }
+  | { type: "CHOOSE_TARGET"; player: PlayerId; target: Target }
+  /** Resolves a library search: the chosen card, or null to decline. */
+  | { type: "SEARCH"; player: PlayerId; cardId: CardId | null }
   | { type: "CONCEDE"; player: PlayerId }
   | { type: "RECLAIM_GRAVEYARD"; player: PlayerId };
 

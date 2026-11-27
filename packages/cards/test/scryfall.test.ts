@@ -84,6 +84,100 @@ describe("convertScryfallCard: supported cards", () => {
     });
   });
 
+  it("converts 'each opponent discards' like 'target opponent discards' (two players only)", () => {
+    for (const name of ["Burglar Rat", "Rank Rat", "Nezumi Informant"]) {
+      expect(convert(name).def?.effects).toEqual([{ kind: "discard", amount: 1, target: "opponent" }]);
+    }
+  });
+
+  it("converts evasion keywords", () => {
+    expect(convert("Razortooth Rats").def?.keywords).toEqual(["fear"]);
+    expect(convert("Elephant-Rat").def?.keywords).toEqual(["menace"]);
+    expect(convert("Rancid Rats").def?.keywords).toEqual(["skulk", "deathtouch"]);
+  });
+
+  it("converts 'this creature can't block'", () => {
+    expect(convert("Nezumi Cutthroat").def?.keywords).toEqual(["fear", "cant_block"]);
+  });
+
+  it("converts a mana-cost activated ability with a lose-life effect", () => {
+    expect(convert("Engine Rat").def).toMatchObject({
+      keywords: ["deathtouch"],
+      abilities: [{ cost: [{ kind: "mana", cost: { generic: 5, B: 1 } }], effect: { kind: "lose_life", amount: 2, target: "opponent" } }],
+    });
+  });
+
+  it("converts lifelink, first strike and trample", () => {
+    expect(convert("Child of Night").def?.keywords).toEqual(["lifelink"]);
+    expect(convert("Knight of Meadowgrain").def?.keywords).toEqual(["first_strike", "lifelink"]);
+    expect(convert("Charging Badger").def?.keywords).toEqual(["trample"]);
+  });
+
+  it("converts an X ability restricted to one colour, with damage to everything", () => {
+    expect(convert("Crypt Rats").def?.abilities).toEqual([
+      { cost: [{ kind: "x", only: "B" }], effect: { kind: "damage_all", amount: "x" } },
+    ]);
+  });
+
+  it("converts subtypes, an upkeep search trigger and fear (Ratcatcher)", () => {
+    expect(convert("Ratcatcher").def).toMatchObject({
+      subtypes: ["ogre", "rogue"],
+      keywords: ["fear"],
+      triggers: [{ on: "upkeep", effect: { kind: "search_library", subtype: "rat" } }],
+    });
+    expect(convert("Crypt Rats").def?.subtypes).toEqual(["rat"]);
+    expect(convert("Swamp").def?.subtypes).toEqual(["swamp"]);
+  });
+
+  it("converts a token-making creature and carries the token definition", () => {
+    const r = convert("Ferocious Pup");
+    expect(r.def?.effects).toEqual([
+      { kind: "create_token", tokenDefId: "mtg_token_green_2_2_wolf", count: 1, label: "2/2 green Wolf creature token" },
+    ]);
+    expect(r.tokens).toEqual([
+      {
+        id: "mtg_token_green_2_2_wolf",
+        game: "mtg",
+        name: "Wolf",
+        types: ["creature"],
+        subtypes: ["wolf"],
+        colors: ["G"],
+        power: 2,
+        toughness: 2,
+        token: true,
+      },
+    ]);
+  });
+
+  it("converts a token-making instant", () => {
+    expect(convert("Raise the Alarm").def?.effects).toEqual([
+      { kind: "create_token", tokenDefId: "mtg_token_white_1_1_soldier", count: 2, label: "1/1 white Soldier creature token" },
+    ]);
+  });
+
+  it("converts computed power from a Rat count", () => {
+    expect(convert("Swarm of Rats").def).toMatchObject({ power: 0, toughness: 1, powerFrom: { subtype: "rat", scope: "yours" } });
+    expect(convert("Pestilence Rats").def).toMatchObject({ toughness: 3, powerFrom: { subtype: "rat", scope: "others" } });
+  });
+
+  it("still refuses what it can't run: computed toughness, copy tokens, sacrifice costs", () => {
+    expect(convert("Pack Rat").unsupported.join(" ")).toMatch(/Power\/toughness/);
+    expect(convert("Marrow-Gnawer").unsupported.join(" ")).toMatch(/Sacrifice a Rat/);
+  });
+
+  it("importing a deck brings the token definitions along", async () => {
+    const { fn } = mockFetch((n) => fixtureServer(n));
+    const deck = await importDecklist("2 Ferocious Pup", { fetch: fn });
+    expect(Object.keys(deck.defs).sort()).toEqual(["mtg_ferocious_pup", "mtg_token_green_2_2_wolf"]);
+    expect(deck.cards).toEqual(["mtg_ferocious_pup", "mtg_ferocious_pup"]);
+  });
+
+  it("converts a dies trigger", () => {
+    expect(convert("Disease Carriers").def?.triggers).toEqual([
+      { on: "dies", effect: { kind: "pump", power: -2, toughness: -2, target: "creature", duration: "until_end_of_turn" } },
+    ]);
+  });
+
   it("converts removal, card draw and compound spells", () => {
     expect(convert("Murder").def?.effects).toEqual([{ kind: "destroy", target: "creature" }]);
     expect(convert("Divination").def?.effects).toEqual([{ kind: "draw", amount: 2, target: "self" }]);

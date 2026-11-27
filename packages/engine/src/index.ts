@@ -4,5 +4,5 @@ export type { GameSetup } from "./engine";
 export { mtgPack } from "./rulepacks/mtg";
 export { planPayment } from "./mana";
 export { clone } from "./clone";
-export { attackCandidates, blockCandidates } from "./combat";
+export { attackCandidates, blockCandidates, validateBlocks, effectivePower, effectiveToughness } from "./combat";
 export { legalTargets, isLegalTarget, targetSpecOf, creaturesInPlay } from "./targeting";

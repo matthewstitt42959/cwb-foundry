@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   applyAction,
   attackCandidates,
+  blockCandidates,
   clone,
+  effectivePower,
   getLegalActions,
   type Action,
   type CardId,
@@ -283,5 +285,180 @@ describe("declaration legal actions", () => {
     expect(legal.every((a) => a.type === "DECLARE_BLOCKERS" && a.player === "p2")).toBe(true);
     expect(legal).toHaveLength(2); // no block, or giant blocks bear
     for (const a of legal) expect(applyAction(rules, g, a).ok).toBe(true);
+  });
+});
+
+describe("evasion keywords", () => {
+  const block = (blocker: CardId, attacker: CardId) => ({ blocker, attacker });
+
+  function blocking(attacker: string, defenders: string[]) {
+    const { s, p1Ids, p2Ids } = atAttackers([attacker], defenders);
+    const [a] = p1Ids as [CardId];
+    const g = passRound(ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [a] }));
+    expect(g.pending).toBe("blockers");
+    return { g, a, d: p2Ids };
+  }
+
+  const tryBlocks = (g: GameState, blocks: ReturnType<typeof block>[]) =>
+    applyAction(rules, g, { type: "DECLARE_BLOCKERS", player: "p2", blocks });
+
+  it("fear: only a black creature can block it", () => {
+    const { g, a, d } = blocking("shade", ["bear", "ghoul"]);
+    const [bear, ghoul] = d as [CardId, CardId];
+    expect(tryBlocks(g, [block(bear, a)])).toEqual({
+      ok: false,
+      error: "Only black creatures can block a creature with fear",
+    });
+    expect(tryBlocks(g, [block(ghoul, a)]).ok).toBe(true);
+  });
+
+  it("menace: a single blocker is rejected, two are fine", () => {
+    const { g, a, d } = blocking("ogre", ["bear", "giant"]);
+    const [bear, giant] = d as [CardId, CardId];
+    expect(tryBlocks(g, [block(bear, a)])).toEqual({
+      ok: false,
+      error: "A creature with menace must be blocked by two or more creatures",
+    });
+    expect(tryBlocks(g, [block(bear, a), block(giant, a)]).ok).toBe(true);
+    expect(tryBlocks(g, []).ok).toBe(true);
+  });
+
+  it("skulk: can't be blocked by a creature with greater power", () => {
+    const { g, a, d } = blocking("skulker", ["bear", "ghoul"]);
+    const [bear, ghoul] = d as [CardId, CardId];
+    expect(tryBlocks(g, [block(bear, a)])).toEqual({
+      ok: false,
+      error: "A creature with skulk can't be blocked by a creature with greater power",
+    });
+    expect(tryBlocks(g, [block(ghoul, a)]).ok).toBe(true); // equal power is fine
+  });
+
+  it("cant_block: is never a block candidate", () => {
+    const { s } = atAttackers(["bear"], ["coward", "ghoul"]);
+    const g = passRound(
+      ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [s.players.p1?.battlefield[0] as CardId] }),
+    );
+    expect(g.pending).toBe("blockers");
+    const [coward, ghoul] = s.players.p2?.battlefield.slice(-2) as [CardId, CardId];
+    expect(blockCandidates(rules, g)).toEqual([ghoul]);
+    expect(tryBlocks(g, [block(coward, g.combat?.attackers[0] as CardId)])).toEqual({
+      ok: false,
+      error: "That creature can't block",
+    });
+  });
+});
+
+describe("tokens and computed power", () => {
+  it("a creature's enter effect creates tokens that are summoning sick", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const brood = give(s, "p1", "brood", "hand");
+    s = ok(brood.state, { type: "CAST", player: "p1", cardId: brood.id });
+    s = passRound(s);
+    const tokens = (s.players.p1?.battlefield ?? []).filter((id) => s.cards[id]?.defId === "ratToken");
+    expect(tokens).toHaveLength(2);
+    expect(new Set(tokens).size).toBe(2); // unique ids
+    expect(s.cards[tokens[0] as CardId]?.owner).toBe("p1");
+    expect(attackCandidates(rules, s)).not.toContain(tokens[0]);
+    expect(s.log).toContain("p1 creates 2 1/1 black Rat creature tokens");
+  });
+
+  it("a token that dies ceases to exist instead of going to the graveyard", () => {
+    const { s, p1Ids, p2Ids } = atAttackers(["giant"], ["ratToken"]);
+    const [giant] = p1Ids as [CardId];
+    const [token] = p2Ids as [CardId];
+    let g = passRound(ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [giant] }));
+    g = ok(g, { type: "DECLARE_BLOCKERS", player: "p2", blocks: [{ blocker: token, attacker: giant }] });
+    g = passRound(g);
+    expect(g.players.p2?.battlefield).not.toContain(token);
+    expect(g.players.p2?.graveyard).not.toContain(token);
+  });
+
+  it("a token's explicit colour decides who it can block under fear", () => {
+    const { s, p1Ids, p2Ids } = atAttackers(["shade"], ["ratToken", "ratling"]);
+    const [shade] = p1Ids as [CardId];
+    const [token, ratling] = p2Ids as [CardId, CardId];
+    const g = passRound(ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [shade] }));
+    const block = (b: CardId) =>
+      applyAction(rules, g, { type: "DECLARE_BLOCKERS", player: "p2", blocks: [{ blocker: b, attacker: shade }] });
+    expect(block(token).ok).toBe(true); // black token
+    expect(block(ratling).ok).toBe(false); // colourless
+  });
+
+  it("power can be the number of Rats you control (itself included)", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const sw = give(s, "p1", "swarm", "battlefield");
+    s = give(sw.state, "p1", "ratling", "battlefield").state;
+    s = give(s, "p1", "ratToken", "battlefield").state;
+    s = give(s, "p2", "ratling", "battlefield").state; // the opponent's Rat doesn't count
+    expect(effectivePower(rules, s, sw.id)).toBe(3);
+  });
+
+  it("power can be the number of other Rats on the battlefield, either side", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const pest = give(s, "p1", "pest", "battlefield");
+    s = give(pest.state, "p1", "ratling", "battlefield").state;
+    s = give(s, "p2", "ratling", "battlefield").state;
+    s = give(s, "p2", "bear", "battlefield").state; // not a Rat
+    expect(effectivePower(rules, s, pest.id)).toBe(2);
+  });
+
+  it("combat uses the computed power", () => {
+    const { s, p1Ids } = atAttackers(["swarm", "ratling", "ratToken"]);
+    const [swarm] = p1Ids as [CardId];
+    let g = passRound(ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [swarm] }));
+    g = passRound(g);
+    expect(g.players.p2?.life).toBe(17);
+  });
+});
+
+describe("first strike, trample and lifelink", () => {
+  const fight = (attacker: string, blocker: string | null) => {
+    const { s, p1Ids, p2Ids } = atAttackers([attacker], blocker ? [blocker] : []);
+    const [a] = p1Ids as [CardId];
+    const [b] = p2Ids;
+    let g = passRound(ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [a] }));
+    if (b) g = ok(g, { type: "DECLARE_BLOCKERS", player: "p2", blocks: [{ blocker: b, attacker: a }] });
+    g = passRound(g);
+    return { g, a, b };
+  };
+
+  it("first strike kills a blocker before it can deal damage back", () => {
+    const { g, a, b } = fight("fencer", "bear");
+    expect(g.players.p2?.graveyard).toContain(b);
+    expect(g.players.p1?.battlefield).toContain(a);
+    expect(g.cards[a]?.damage).toBe(0);
+  });
+
+  it("a first-strike blocker kills the attacker first too", () => {
+    const { g, a, b } = fight("bear", "fencer");
+    expect(g.players.p1?.graveyard).toContain(a);
+    expect(g.players.p2?.battlefield).toContain(b as CardId);
+    expect(g.cards[b as CardId]?.damage).toBe(0);
+  });
+
+  it("first strikers still trade with creatures that survive the first step", () => {
+    const { g, a, b } = fight("fencer", "giant");
+    expect(g.players.p1?.graveyard).toContain(a);
+    expect(g.cards[b as CardId]?.damage).toBe(2);
+  });
+
+  it("trample sends the excess damage to the defending player", () => {
+    const { g, a, b } = fight("rhino", "bear");
+    expect(g.players.p2?.graveyard).toContain(b);
+    expect(g.players.p2?.life).toBe(19);
+    expect(g.players.p1?.battlefield).toContain(a);
+  });
+
+  it("without trample a blocked attacker deals nothing to the player", () => {
+    const { g } = fight("giant", "bear");
+    expect(g.players.p2?.life).toBe(20);
+  });
+
+  it("lifelink gains life for combat damage to a player and to a creature", () => {
+    const unblocked = fight("leech", null).g;
+    expect(unblocked.players.p1?.life).toBe(22);
+    expect(unblocked.players.p2?.life).toBe(18);
+    const blocked = fight("leech", "bear").g;
+    expect(blocked.players.p1?.life).toBe(22);
   });
 });
