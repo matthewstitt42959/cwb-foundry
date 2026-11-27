@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyAction, clone, createGame, getLegalActions, type Action, type GameState } from "../src";
+import { applyAction, clone, createGame, getLegalActions, validateAction, type Action, type GameState } from "../src";
 import { deck, give, newGame, passUntilPhase, rules } from "./fixtures";
 
 function ok(state: GameState, action: Action): GameState {
@@ -164,6 +164,68 @@ describe("winning and losing", () => {
     expect(s.turn).toBe(2); // p2's draw on turn 2 ended the game
     expect(s.over).toBe(true);
     expect(s.winner).toBe("p1");
+  });
+});
+
+describe("conceding", () => {
+  it("ends the game immediately, even with a declaration pending", () => {
+    const main = passUntilPhase(newGame(), "main1");
+    const sprinter = give(main, "p1", "sprinter", "battlefield"); // haste: can attack the turn it enters
+    let s = passUntilPhase(sprinter.state, "attackers");
+    expect(s.pending).toBe("attackers"); // a declaration is pending; nothing else is normally legal
+    expect(applyAction(rules, s, { type: "CONCEDE", player: "p1" })).toEqual({
+      ok: true,
+      state: expect.objectContaining({ over: true, winner: "p2" }),
+    });
+  });
+
+  it("rejects a concede from an unknown player", () => {
+    const s = newGame();
+    expect(applyAction(rules, s, { type: "CONCEDE", player: "nobody" }).ok).toBe(false);
+  });
+});
+
+describe("reclaiming a graveyard", () => {
+  function withEmptyLibrary(graveyardSize: number): GameState {
+    const s = clone(passUntilPhase(newGame(), "main1"));
+    const p1 = s.players.p1 as { library: string[]; graveyard: string[] };
+    p1.graveyard = p1.library.slice(0, graveyardSize);
+    p1.library = [];
+    return s;
+  }
+
+  it("shuffles the graveyard back into the library", () => {
+    const s0 = withEmptyLibrary(5);
+    const s = ok(s0, { type: "RECLAIM_GRAVEYARD", player: "p1" });
+    expect(s.players.p1?.library).toHaveLength(5);
+    expect(s.players.p1?.graveyard).toHaveLength(0);
+  });
+
+  it("rejects it unless the library is actually empty", () => {
+    const s = passUntilPhase(newGame(), "main1");
+    expect(validateAction(rules, s, { type: "RECLAIM_GRAVEYARD", player: "p1" })).toMatch(/isn't empty/);
+  });
+
+  it("rejects it when the graveyard is empty too", () => {
+    const s = withEmptyLibrary(0);
+    expect(validateAction(rules, s, { type: "RECLAIM_GRAVEYARD", player: "p1" })).toMatch(/graveyard is empty/);
+  });
+
+  it("can be done for a player who doesn't hold priority", () => {
+    const s0 = withEmptyLibrary(4);
+    expect(s0.priority).toBe("p1");
+    const empty = clone(s0);
+    const p2 = empty.players.p2 as { library: string[]; graveyard: string[] };
+    p2.graveyard = p2.library.slice(0, 3);
+    p2.library = [];
+    const s = ok(empty, { type: "RECLAIM_GRAVEYARD", player: "p2" });
+    expect(s.players.p2?.library).toHaveLength(3);
+    expect(s.priority).toBe("p1");
+  });
+
+  it("is offered by getLegalActions once the library is empty", () => {
+    const s = withEmptyLibrary(3);
+    expect(getLegalActions(rules, s)).toContainEqual({ type: "RECLAIM_GRAVEYARD", player: "p1" });
   });
 });
 

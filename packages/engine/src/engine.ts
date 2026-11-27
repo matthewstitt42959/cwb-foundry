@@ -286,6 +286,19 @@ function validateDiscard(state: GameState, cardIds: CardId[]): string | null {
 export function validateAction(rules: Ruleset, state: GameState, action: Action): string | null {
   if (state.over) return "The game is over";
 
+  // A player may concede at any time, regardless of priority or a pending declaration.
+  if (action.type === "CONCEDE") return state.players[action.player] ? null : "Unknown player";
+
+  // Reclaiming is likewise priority-free: the human decides it for either side, so it
+  // can name a player who doesn't currently hold priority.
+  if (action.type === "RECLAIM_GRAVEYARD") {
+    const p = state.players[action.player];
+    if (!p) return "Unknown player";
+    if (p.library.length > 0) return "That library isn't empty";
+    if (p.graveyard.length === 0) return "That graveyard is empty too";
+    return null;
+  }
+
   // While a declaration or discard is pending, only that action is legal.
   if (state.pending) {
     if (action.player !== pendingActor(state)) return "Waiting for the other player to declare";
@@ -400,6 +413,9 @@ export function getLegalActions(rules: Ruleset, state: GameState): Action[] {
   }
 
   const candidates: Action[] = [{ type: "PASS", player }];
+  if (me.library.length === 0 && me.graveyard.length > 0) {
+    candidates.push({ type: "RECLAIM_GRAVEYARD", player });
+  }
   for (const cardId of me.hand) {
     candidates.push({ type: "PLAY_LAND", player, cardId });
     const inst = state.cards[cardId];
@@ -506,6 +522,20 @@ export function applyAction(rules: Ruleset, state: GameState, action: Action): A
       // Same as casting: the activator keeps priority and everyone may respond.
       next.passes = 0;
       next.log.push(`${action.player} activates ${def.name}`);
+      break;
+    }
+    case "CONCEDE": {
+      me.lost = true;
+      next.log.push(`${action.player} concedes`);
+      checkState(next);
+      break;
+    }
+    case "RECLAIM_GRAVEYARD": {
+      const shuffled = shuffle(me.graveyard, next.rngState);
+      next.rngState = shuffled.state;
+      me.library = shuffled.items;
+      me.graveyard = [];
+      next.log.push(`${action.player} shuffles their graveyard back into their library`);
       break;
     }
     case "PASS": {
