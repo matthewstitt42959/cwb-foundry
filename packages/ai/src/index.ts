@@ -143,11 +143,6 @@ function decideDiscard(rules: Ruleset, state: GameState, me: PlayerId): Action {
 // ---- main phase -----------------------------------------------------------
 
 function decideMain(rules: Ruleset, state: GameState, me: PlayerId, legal: Action[]): Action | null {
-  // An empty library is a ticking clock (the next forced draw loses the game): reclaim
-  // the graveyard the moment it's available, ahead of anything else the AI might do.
-  const reclaim = legal.find((a) => a.type === "RECLAIM_GRAVEYARD");
-  if (reclaim) return reclaim;
-
   // Activated abilities (e.g. a combat trick) are worth considering any time the AI has
   // priority, unlike casting sorcery-speed spells, which still waits for its own main phase.
   let bestActivation: { action: Action; score: number } | null = null;
