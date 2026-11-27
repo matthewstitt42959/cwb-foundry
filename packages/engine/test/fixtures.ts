@@ -143,6 +143,26 @@ export const defs: CardDefs = {
     toughness: 1,
     abilities: [{ cost: [{ kind: "mana", cost: { R: 1 } }], effect: { kind: "lose_life", amount: 2, target: "opponent" } }],
   },
+  martyr: {
+    id: "martyr",
+    game: "test",
+    name: "Test Martyr",
+    types: ["creature"],
+    power: 1,
+    toughness: 1,
+    triggers: [
+      { on: "dies", effect: { kind: "pump", power: -2, toughness: -2, target: "creature", duration: "until_end_of_turn" } },
+    ],
+  },
+  raider: {
+    id: "raider",
+    game: "test",
+    name: "Test Raider",
+    types: ["creature"],
+    power: 2,
+    toughness: 2,
+    triggers: [{ on: "attacks", effect: { kind: "lose_life", amount: 1, target: "opponent" } }],
+  },
   imp: {
     id: "imp",
     game: "test",

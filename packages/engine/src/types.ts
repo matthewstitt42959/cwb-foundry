@@ -54,6 +54,22 @@ export interface Ability {
   effect: Effect;
 }
 
+/** Events a triggered ability can listen for on its own creature. */
+export type TriggerEvent = "dies" | "attacks";
+
+/** "When this dies, ..." / "Whenever this attacks, ...": goes on the stack when the event happens. */
+export interface Trigger {
+  on: TriggerEvent;
+  effect: Effect;
+}
+
+/** A trigger that has fired but isn't on the stack yet (it may still need a target chosen). */
+export interface PendingTrigger {
+  sourceId: CardId;
+  controller: PlayerId;
+  effect: Effect;
+}
+
 /**
  * Evergreen keywords the engine understands.
  * haste: may attack the turn it enters. flying: can only be blocked by flyers.
@@ -93,6 +109,7 @@ export interface CardDef {
   keywords?: Keyword[];
   effects?: Effect[];
   abilities?: Ability[];
+  triggers?: Trigger[];
   /** Optional card image for UIs (e.g. from an importer). The engine never reads it. */
   imageUrl?: string;
 }
@@ -189,8 +206,12 @@ export interface GameState {
   passes: number;
   stack: StackItem[];
   combat: CombatState | null;
-  /** Set while a player must declare attackers/blockers, or choose a card to discard. */
-  pending: "attackers" | "blockers" | "discard" | null;
+  /** Set while a player must declare attackers/blockers, choose a card to discard, or pick a trigger's target. */
+  pending: "attackers" | "blockers" | "discard" | "target" | null;
+  /** Triggers that have fired and are waiting to go on the stack, in order. */
+  triggers: PendingTrigger[];
+  /** Set while `pending` is "target": whose trigger needs a target, and what it does. */
+  targeting: { player: PlayerId; sourceId: CardId; effect: Effect } | null;
   /** Set while `pending` is "discard": who must discard, and how many cards. */
   discard: { player: PlayerId; count: number } | null;
   rngState: number;
@@ -207,6 +228,7 @@ export type Action =
   | { type: "DECLARE_BLOCKERS"; player: PlayerId; blocks: BlockAssignment[] }
   | { type: "DISCARD"; player: PlayerId; cardIds: CardId[] }
   | { type: "ACTIVATE"; player: PlayerId; cardId: CardId; abilityIndex: number; targets?: Target[] }
+  | { type: "CHOOSE_TARGET"; player: PlayerId; target: Target }
   | { type: "CONCEDE"; player: PlayerId }
   | { type: "RECLAIM_GRAVEYARD"; player: PlayerId };
 

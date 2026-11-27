@@ -1,4 +1,4 @@
-import type { Ability, CardDef, CardType, Cost, Effect, Keyword, ManaCost } from "@cwb/engine";
+import type { Ability, CardDef, CardType, Cost, Effect, Keyword, ManaCost, Trigger } from "@cwb/engine";
 import type { ScryfallCard } from "./types";
 
 /**
@@ -247,6 +247,7 @@ export function convertScryfallCard(card: ScryfallCard): ConvertResult {
     const keywords: Keyword[] = [];
     const etbEffects: Effect[] = [];
     const abilities: Ability[] = [];
+    const triggers: Trigger[] = [];
     const escapedName = escapeRegExp(card.name);
     for (const line of text.split("\n").map(stripReminderText).filter(Boolean)) {
       const normalized = line.replace(new RegExp(escapedName, "gi"), "~").replace(/\bthis creature\b/gi, "~");
@@ -255,6 +256,13 @@ export function convertScryfallCard(card: ScryfallCard): ConvertResult {
       const etbEffect = etb ? parseClause((etb[1] ?? "").trim().toLowerCase()) : null;
       if (etbEffect) {
         etbEffects.push(etbEffect);
+        continue;
+      }
+
+      const trig = normalized.match(/^when(?:ever)? ~ (dies|attacks),\s*(.+?)\.?$/i);
+      const trigEffect = trig ? parseClause((trig[2] ?? "").trim().toLowerCase()) : null;
+      if (trig && trigEffect) {
+        triggers.push({ on: trig[1]?.toLowerCase() === "dies" ? "dies" : "attacks", effect: trigEffect });
         continue;
       }
 
@@ -276,6 +284,7 @@ export function convertScryfallCard(card: ScryfallCard): ConvertResult {
     if (keywords.length) base.keywords = [...new Set(keywords)];
     if (etbEffects.length) base.effects = etbEffects;
     if (abilities.length) base.abilities = abilities;
+    if (triggers.length) base.triggers = triggers;
   } else {
     const { effects, problems: textProblems } = parseSpellText(text, card.name);
     reasons.push(...textProblems);

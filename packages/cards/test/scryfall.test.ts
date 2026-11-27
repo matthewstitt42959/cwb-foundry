@@ -113,6 +113,12 @@ describe("convertScryfallCard: supported cards", () => {
     expect(convert("Charging Badger").def?.keywords).toEqual(["trample"]);
   });
 
+  it("converts a dies trigger", () => {
+    expect(convert("Disease Carriers").def?.triggers).toEqual([
+      { on: "dies", effect: { kind: "pump", power: -2, toughness: -2, target: "creature", duration: "until_end_of_turn" } },
+    ]);
+  });
+
   it("converts removal, card draw and compound spells", () => {
     expect(convert("Murder").def?.effects).toEqual([{ kind: "destroy", target: "creature" }]);
     expect(convert("Divination").def?.effects).toEqual([{ kind: "draw", amount: 2, target: "self" }]);

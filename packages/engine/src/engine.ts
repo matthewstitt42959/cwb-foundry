@@ -13,6 +13,7 @@ import {
 import { applyEffect, checkState, drawCards, opponentOf } from "./effects";
 import { isLegalTarget, legalTargets, legalTargetsForSpec, targetSpecOf, targetSpecOfEffect } from "./targeting";
 import { planPayment } from "./mana";
+import { flushTriggers } from "./triggers";
 import { shuffle } from "./rng";
 import type {
   Action,
@@ -77,6 +78,8 @@ export function createGame(rules: Ruleset, setup: GameSetup): GameState {
     stack: [],
     combat: null,
     pending: null,
+    triggers: [],
+    targeting: null,
     discard: null,
     rngState,
     over: false,
@@ -267,9 +270,10 @@ function resolveTop(rules: Ruleset, state: GameState): void {
   checkState(state);
 }
 
-/** Who must act while a declaration or discard is pending (null if nothing is). */
+/** Who must act while a declaration, discard or trigger target is pending (null if nothing is). */
 function pendingActor(state: GameState): PlayerId | null {
   if (state.pending === "discard") return state.discard?.player ?? null;
+  if (state.pending === "target") return state.targeting?.player ?? null;
   return declarer(state);
 }
 
@@ -319,11 +323,21 @@ export function validateAction(rules: Ruleset, state: GameState, action: Action)
     if (action.type === "DISCARD" && state.pending === "discard") {
       return validateDiscard(state, action.cardIds);
     }
+    if (action.type === "CHOOSE_TARGET" && state.pending === "target") {
+      const spec = state.targeting && targetSpecOfEffect(state.targeting.effect);
+      return spec && isLegalTarget(rules, state, spec, action.target) ? null : "Invalid target";
+    }
     if (state.pending === "attackers") return "Declare attackers first";
     if (state.pending === "blockers") return "Declare blockers first";
+    if (state.pending === "target") return "Choose a target first";
     return "Discard a card first";
   }
-  if (action.type === "DECLARE_ATTACKERS" || action.type === "DECLARE_BLOCKERS" || action.type === "DISCARD") {
+  if (
+    action.type === "DECLARE_ATTACKERS" ||
+    action.type === "DECLARE_BLOCKERS" ||
+    action.type === "DISCARD" ||
+    action.type === "CHOOSE_TARGET"
+  ) {
     return "Not declaring now";
   }
 
@@ -412,6 +426,12 @@ export function getLegalActions(rules: Ruleset, state: GameState): Action[] {
       }
     }
     return options;
+  }
+  if (state.pending === "target" && state.targeting) {
+    const { player: who, effect } = state.targeting;
+    return legalTargetsForSpec(rules, state, targetSpecOfEffect(effect)).map(
+      (target): Action => ({ type: "CHOOSE_TARGET", player: who, target }),
+    );
   }
   if (state.pending === "discard" && state.discard) {
     const { player: who, count } = state.discard;
@@ -532,6 +552,24 @@ export function applyAction(rules: Ruleset, state: GameState, action: Action): A
       next.log.push(`${action.player} activates ${def.name}`);
       break;
     }
+    case "CHOOSE_TARGET": {
+      const t = next.targeting;
+      next.pending = null;
+      next.targeting = null;
+      if (t) {
+        next.stack.push({
+          kind: "ability",
+          sourceId: t.sourceId,
+          controller: t.player,
+          effect: t.effect,
+          targets: [action.target],
+        });
+        next.log.push(`${rules.defs[next.cards[t.sourceId]?.defId ?? ""]?.name ?? t.sourceId}'s ability triggers`);
+      }
+      next.passes = 0;
+      next.priority = next.activePlayer;
+      break;
+    }
     case "CONCEDE": {
       me.lost = true;
       next.log.push(`${action.player} concedes`);
@@ -580,5 +618,6 @@ export function applyAction(rules: Ruleset, state: GameState, action: Action): A
       break;
     }
   }
+  if (!next.over) flushTriggers(rules, next);
   return { ok: true, state: next };
 }

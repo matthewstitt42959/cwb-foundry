@@ -918,6 +918,33 @@
     "crop": "https://cards.scryfall.io/crop/front/5/d/5d88ad54-43fc-45e0-8e00-db6be0c021ea.webp?1783939538",
     "jpeg": "https://cards.scryfall.io/normal/front/5/d/5d88ad54-43fc-45e0-8e00-db6be0c021ea.jpg?1783939538"
    }
+  },
+  {
+   "object": "card",
+   "id": "49125cfc-dbae-4543-9d2d-4cc78f45ce9a",
+   "oracle_id": "ccdd6376-9b74-4d13-9f80-87d0bd3d4a2a",
+   "name": "Disease Carriers",
+   "layout": "normal",
+   "mana_cost": "{2}{B}{B}",
+   "type_line": "Creature \u2014 Rat",
+   "oracle_text": "When this creature dies, target creature gets -2/-2 until end of turn.",
+   "power": "2",
+   "toughness": "2",
+   "keywords": [],
+   "image_uris": {
+    "small": "https://cards.scryfall.io/small/front/4/9/49125cfc-dbae-4543-9d2d-4cc78f45ce9a.jpg?1783946074",
+    "normal": "https://cards.scryfall.io/normal/front/4/9/49125cfc-dbae-4543-9d2d-4cc78f45ce9a.jpg?1783946074",
+    "large": "https://cards.scryfall.io/large/front/4/9/49125cfc-dbae-4543-9d2d-4cc78f45ce9a.jpg?1783946074",
+    "png": "https://cards.scryfall.io/png/front/4/9/49125cfc-dbae-4543-9d2d-4cc78f45ce9a.png?1783946074",
+    "art_crop": "https://cards.scryfall.io/art_crop/front/4/9/49125cfc-dbae-4543-9d2d-4cc78f45ce9a.jpg?1783946074",
+    "border_crop": "https://cards.scryfall.io/border_crop/front/4/9/49125cfc-dbae-4543-9d2d-4cc78f45ce9a.jpg?1783946074",
+    "thumb": "https://cards.scryfall.io/thumb/front/4/9/49125cfc-dbae-4543-9d2d-4cc78f45ce9a.webp?1783946074",
+    "grid": "https://cards.scryfall.io/grid/front/4/9/49125cfc-dbae-4543-9d2d-4cc78f45ce9a.webp?1783946074",
+    "display": "https://cards.scryfall.io/display/front/4/9/49125cfc-dbae-4543-9d2d-4cc78f45ce9a.webp?1783946074",
+    "art": "https://cards.scryfall.io/art/front/4/9/49125cfc-dbae-4543-9d2d-4cc78f45ce9a.webp?1783946074",
+    "crop": "https://cards.scryfall.io/crop/front/4/9/49125cfc-dbae-4543-9d2d-4cc78f45ce9a.webp?1783946074",
+    "jpeg": "https://cards.scryfall.io/normal/front/4/9/49125cfc-dbae-4543-9d2d-4cc78f45ce9a.jpg?1783946074"
+   }
   }
  ]
 }

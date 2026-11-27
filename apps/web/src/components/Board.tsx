@@ -81,12 +81,16 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
   };
 
   const aimingDef = aiming ? defOf(aiming) : undefined;
-  const picking = aiming !== null || activating !== null; // choosing a target for a spell or ability
+  const triggerPick = state.pending === "target" && myDecision; // choosing a target for a trigger
+  const picking = aiming !== null || activating !== null || triggerPick; // choosing a target for a spell, ability or trigger
   const activations = useMemo(
     () => legal.filter((a): a is Extract<Action, { type: "ACTIVATE" }> => a.type === "ACTIVATE"),
     [legal],
   );
   const targets: Target[] = useMemo(() => {
+    if (triggerPick) {
+      return legal.flatMap((a) => (a.type === "CHOOSE_TARGET" ? [a.target] : []));
+    }
     if (aimingDef) return legalTargets(rules, state, aimingDef);
     if (activating) {
       return activations
@@ -94,12 +98,13 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
         .flatMap((a) => a.targets ?? []);
     }
     return [];
-  }, [aimingDef, activating, activations, state]);
+  }, [aimingDef, activating, activations, triggerPick, legal, state]);
   const isTarget = (t: Target) => targets.some((x) => x.kind === t.kind && x.id === t.id);
 
   const pickTarget = (t: Target) => {
     if (!isTarget(t)) return;
-    if (aiming) act({ type: "CAST", player: HUMAN, cardId: aiming, targets: [t] });
+    if (triggerPick) act({ type: "CHOOSE_TARGET", player: HUMAN, target: t });
+    else if (aiming) act({ type: "CAST", player: HUMAN, cardId: aiming, targets: [t] });
     else if (activating) {
       act({ type: "ACTIVATE", player: HUMAN, cardId: activating.cardId, abilityIndex: activating.abilityIndex, targets: [t] });
     }
@@ -332,6 +337,11 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
                     Cancel
                   </button>
                 </>
+              )}
+              {triggerPick && (
+                <span>
+                  Choose a target for {defOf(state.targeting?.sourceId ?? "")?.name}&apos;s triggered ability
+                </span>
               )}
               {activating && (
                 <>

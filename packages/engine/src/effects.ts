@@ -1,3 +1,4 @@
+import { queueTriggers } from "./triggers";
 import type { CardId, Effect, GameState, PlayerId, Ruleset, Target } from "./types";
 
 export function opponentOf(state: GameState, player: PlayerId): PlayerId {
@@ -69,6 +70,7 @@ export function applyEffect(
     if (t?.kind === "card") {
       state.log.push(`${name(t.id)} is destroyed`);
       putInGraveyard(state, t.id);
+      queueTriggers(rules, state, t.id, "dies");
     }
     return;
   }

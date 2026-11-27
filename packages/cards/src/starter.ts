@@ -203,6 +203,9 @@ export function cardText(def: CardDef): string {
   if (def.keywords?.length) parts.push(def.keywords.map(keywordText).join(", "));
   for (const e of def.effects ?? []) parts.push(effectText(e));
   for (const a of def.abilities ?? []) parts.push(`${costText(a.cost)}: ${effectText(a.effect)}`);
+  for (const t of def.triggers ?? []) {
+    parts.push(`${t.on === "dies" ? "When this creature dies," : "Whenever this creature attacks,"} ${lower(effectText(t.effect))}`);
+  }
   return parts.join(" ");
 }
 
@@ -210,6 +213,10 @@ function keywordText(k: string): string {
   if (k === "cant_block") return "Can't block";
   if (k === "first_strike") return "First strike";
   return cap(k);
+}
+
+function lower(s: string): string {
+  return s.charAt(0).toLowerCase() + s.slice(1);
 }
 
 function cap(s: string): string {

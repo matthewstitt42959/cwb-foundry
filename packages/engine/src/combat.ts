@@ -1,4 +1,5 @@
 import { opponentOf } from "./effects";
+import { queueTriggers } from "./triggers";
 import type {
   BlockAssignment,
   CardId,
@@ -120,6 +121,7 @@ export function declareAttackers(rules: Ruleset, state: GameState, attackers: Ca
     const inst = state.cards[id];
     if (inst && !hasKeyword(rules, state, id, "vigilance")) inst.tapped = true;
     state.log.push(`${defOf(rules, state, id)?.name ?? id} attacks`);
+    queueTriggers(rules, state, id, "attacks");
   }
   state.combat = { attackers: [...attackers], blocks: [] };
 }
@@ -241,6 +243,7 @@ export function destroyDeadCreatures(rules: Ruleset, state: GameState): void {
       if (dead && inst) {
         state.players[inst.owner]?.graveyard.push(id);
         state.log.push(`${def?.name ?? id} dies`);
+        queueTriggers(rules, state, id, "dies");
       } else {
         survivors.push(id);
       }

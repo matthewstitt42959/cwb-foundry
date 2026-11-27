@@ -29,6 +29,21 @@ const imported = deck({
   mtg_hill_giant: 3,
 });
 
+// Black deck exercising abilities, triggers and the evasion/combat keywords end to end.
+const rats = deck({
+  mtg_swamp: 16,
+  mtg_typhoid_rats: 3,
+  mtg_rabid_rats: 3,
+  mtg_burglar_rat: 2,
+  mtg_elephant_rat: 3,
+  mtg_razortooth_rats: 2,
+  mtg_rancid_rats: 2,
+  mtg_nezumi_cutthroat: 2,
+  mtg_engine_rat: 2,
+  mtg_child_of_night: 2,
+  mtg_disease_carriers: 3,
+});
+
 describe("imported cards run in the real engine", () => {
   it("the imported deck is a legal 40-card deck of cards the engine knows", () => {
     expect(imported).toHaveLength(40);
@@ -52,5 +67,23 @@ describe("imported cards run in the real engine", () => {
     }
     expect(winners.has("p1") && winners.has("p2")).toBe(true);
     expect(helixCast).toBeGreaterThan(0); // compound spells actually get cast
+  });
+
+  it("AI plays 30 full games with a Rat deck (abilities, triggers, keywords) without an illegal action", () => {
+    expect(rats).toHaveLength(40);
+    for (const id of rats) expect(defs[id], id).toBeDefined();
+    let triggers = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      let state = createGame(rules, { decks: { p1: rats, p2: rats }, seed });
+      for (let i = 0; i < 6000 && !state.over; i++) {
+        const action = chooseAction(rules, state);
+        const r = applyAction(rules, state, action);
+        if (!r.ok) throw new Error(`seed ${seed}: illegal action (${r.error}): ${JSON.stringify(action)}`);
+        state = r.state;
+      }
+      expect(state.over, `seed ${seed} didn't finish`).toBe(true);
+      triggers += state.log.filter((l) => l.endsWith("'s ability triggers")).length;
+    }
+    expect(triggers).toBeGreaterThan(0);
   });
 });

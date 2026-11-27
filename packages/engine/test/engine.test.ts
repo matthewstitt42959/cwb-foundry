@@ -350,6 +350,81 @@ describe("abilities with mana costs", () => {
   });
 });
 
+describe("triggered abilities", () => {
+  /** p1's attacker is blocked by each listed p2 creature in turn; returns the state at combat damage. */
+  function combat(attacker: string, blockers: string[]) {
+    let s = passUntilPhase(newGame(), "main1");
+    const a = give(s, "p1", attacker, "battlefield");
+    s = a.state;
+    const bs: string[] = [];
+    for (const b of blockers) {
+      const g = give(s, "p2", b, "battlefield");
+      s = g.state;
+      bs.push(g.id);
+    }
+    s = passUntilPhase(s, "attackers");
+    s = ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [a.id] });
+    s = ok(ok(s, { type: "PASS", player: "p1" }), { type: "PASS", player: "p2" });
+    return { s, a: a.id, bs };
+  }
+  const passRound = (s: GameState) => {
+    const once = ok(s, { type: "PASS", player: s.priority });
+    return ok(once, { type: "PASS", player: once.priority });
+  };
+
+  it("a dies trigger with a single legal target goes on the stack on its own and resolves", () => {
+    const { s, a, bs } = combat("martyr", ["giant"]);
+    const [giant] = bs as [string];
+    let g = ok(s, { type: "DECLARE_BLOCKERS", player: "p2", blocks: [{ blocker: giant, attacker: a }] });
+    g = passRound(g); // combat damage: the martyr dies
+    expect(g.players.p1?.graveyard).toContain(a);
+    expect(g.stack).toHaveLength(1);
+    expect(g.stack[0]).toMatchObject({ kind: "ability", controller: "p1", targets: [{ kind: "card", id: giant }] });
+    g = passRound(g);
+    expect(g.stack).toHaveLength(0);
+    expect(g.cards[giant]?.tempPower).toBe(-2);
+  });
+
+  it("asks the controller to choose when a trigger has several legal targets", () => {
+    const { s, a, bs } = combat("martyr", ["bear", "giant"]);
+    const [bear, giant] = bs as [string, string];
+    let g = ok(s, { type: "DECLARE_BLOCKERS", player: "p2", blocks: [{ blocker: bear, attacker: a }] });
+    g = passRound(g);
+    expect(g.pending).toBe("target");
+    expect(g.priority).toBe("p1");
+    expect(g.stack).toHaveLength(0);
+    expect(getLegalActions(rules, g)).toEqual([
+      { type: "CHOOSE_TARGET", player: "p1", target: { kind: "card", id: bear } },
+      { type: "CHOOSE_TARGET", player: "p1", target: { kind: "card", id: giant } },
+    ]);
+    expect(applyAction(rules, g, { type: "CHOOSE_TARGET", player: "p2", target: { kind: "card", id: giant } })).toEqual({
+      ok: false,
+      error: "Waiting for the other player to declare",
+    });
+    expect(applyAction(rules, g, { type: "PASS", player: "p1" })).toEqual({ ok: false, error: "Choose a target first" });
+    expect(applyAction(rules, g, { type: "CHOOSE_TARGET", player: "p1", target: { kind: "player", id: "p2" } })).toEqual({
+      ok: false,
+      error: "Invalid target",
+    });
+    g = ok(g, { type: "CHOOSE_TARGET", player: "p1", target: { kind: "card", id: giant } });
+    expect(g.pending).toBeNull();
+    expect(g.stack).toHaveLength(1);
+    g = passRound(g);
+    expect(g.cards[giant]?.tempPower).toBe(-2);
+  });
+
+  it("an attack trigger goes on the stack when attackers are declared", () => {
+    let s = passUntilPhase(newGame(), "main1");
+    const r = give(s, "p1", "raider", "battlefield");
+    s = passUntilPhase(r.state, "attackers");
+    s = ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [r.id] });
+    expect(s.stack).toHaveLength(1);
+    expect(s.priority).toBe("p1");
+    s = ok(ok(s, { type: "PASS", player: "p1" }), { type: "PASS", player: "p2" });
+    expect(s.players.p2?.life).toBe(19);
+  });
+});
+
 describe("purity and legal actions", () => {
   it("never mutates the input state, even on illegal actions", () => {
     const s = newGame();

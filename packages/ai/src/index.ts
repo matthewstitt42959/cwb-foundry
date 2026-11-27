@@ -30,6 +30,7 @@ export function chooseAction(rules: Ruleset, state: GameState): Action {
   if (state.pending === "attackers") choice = decideAttackers(rules, state, me);
   else if (state.pending === "blockers") choice = decideBlockers(rules, state, me);
   else if (state.pending === "discard") choice = decideDiscard(rules, state, me);
+  else if (state.pending === "target") choice = decideTrigger(rules, state, me, legal);
   else choice = decideMain(rules, state, me, legal) ?? pass;
 
   if (validateAction(rules, state, choice) === null) return choice;
@@ -146,6 +147,24 @@ function decideDiscard(rules: Ruleset, state: GameState, me: PlayerId): Action {
   const hand = state.players[me]?.hand ?? [];
   const worst = [...hand].sort((a, b) => value(rules, state, a) - value(rules, state, b))[0];
   return { type: "DISCARD", player: me, cardIds: worst ? [worst] : [] };
+}
+
+// ---- trigger targets -----------------------------------------------------------
+
+/** Pick a target for one of our triggers: a lethal one if there is one, else anything that isn't ours. */
+function decideTrigger(rules: Ruleset, state: GameState, me: PlayerId, legal: Action[]): Action {
+  const effect = state.targeting?.effect;
+  let best: { action: Action; score: number } | null = null;
+  for (const a of legal) {
+    if (a.type !== "CHOOSE_TARGET") continue;
+    const t = a.target;
+    const owner = t.kind === "player" ? t.id : state.cards[t.id]?.owner;
+    let score = owner === me ? -100 : 0;
+    if (t.kind === "card") score += value(rules, state, t.id);
+    if (effect && t.kind === "card") score += Math.max(0, scoreAbility(rules, state, me, effect, t));
+    if (!best || score > best.score) best = { action: a, score };
+  }
+  return best?.action ?? { type: "PASS", player: me };
 }
 
 // ---- main phase -----------------------------------------------------------
