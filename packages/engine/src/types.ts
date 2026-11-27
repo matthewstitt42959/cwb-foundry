@@ -187,7 +187,9 @@ export type Action =
   | { type: "DECLARE_ATTACKERS"; player: PlayerId; attackers: CardId[] }
   | { type: "DECLARE_BLOCKERS"; player: PlayerId; blocks: BlockAssignment[] }
   | { type: "DISCARD"; player: PlayerId; cardIds: CardId[] }
-  | { type: "ACTIVATE"; player: PlayerId; cardId: CardId; abilityIndex: number; targets?: Target[] };
+  | { type: "ACTIVATE"; player: PlayerId; cardId: CardId; abilityIndex: number; targets?: Target[] }
+  | { type: "CONCEDE"; player: PlayerId }
+  | { type: "RECLAIM_GRAVEYARD"; player: PlayerId };
 
 export type ApplyResult =
   | { ok: true; state: GameState }

@@ -286,6 +286,9 @@ function validateDiscard(state: GameState, cardIds: CardId[]): string | null {
 export function validateAction(rules: Ruleset, state: GameState, action: Action): string | null {
   if (state.over) return "The game is over";
 
+  // A player may concede at any time, regardless of priority or a pending declaration.
+  if (action.type === "CONCEDE") return state.players[action.player] ? null : "Unknown player";
+
   // While a declaration or discard is pending, only that action is legal.
   if (state.pending) {
     if (action.player !== pendingActor(state)) return "Waiting for the other player to declare";
@@ -310,6 +313,12 @@ export function validateAction(rules: Ruleset, state: GameState, action: Action)
   const me = state.players[action.player];
   if (!me) return "Unknown player";
   if (action.type === "PASS") return null;
+
+  if (action.type === "RECLAIM_GRAVEYARD") {
+    if (me.library.length > 0) return "Your library isn't empty";
+    if (me.graveyard.length === 0) return "Your graveyard is empty too";
+    return null;
+  }
 
   if (action.type === "ACTIVATE") {
     if (!me.battlefield.includes(action.cardId)) return "You don't control that permanent";
@@ -400,6 +409,9 @@ export function getLegalActions(rules: Ruleset, state: GameState): Action[] {
   }
 
   const candidates: Action[] = [{ type: "PASS", player }];
+  if (me.library.length === 0 && me.graveyard.length > 0) {
+    candidates.push({ type: "RECLAIM_GRAVEYARD", player });
+  }
   for (const cardId of me.hand) {
     candidates.push({ type: "PLAY_LAND", player, cardId });
     const inst = state.cards[cardId];
@@ -506,6 +518,21 @@ export function applyAction(rules: Ruleset, state: GameState, action: Action): A
       // Same as casting: the activator keeps priority and everyone may respond.
       next.passes = 0;
       next.log.push(`${action.player} activates ${def.name}`);
+      break;
+    }
+    case "CONCEDE": {
+      me.lost = true;
+      next.log.push(`${action.player} concedes`);
+      checkState(next);
+      break;
+    }
+    case "RECLAIM_GRAVEYARD": {
+      const shuffled = shuffle(me.graveyard, next.rngState);
+      next.rngState = shuffled.state;
+      me.library = shuffled.items;
+      me.graveyard = [];
+      next.passes = 0;
+      next.log.push(`${action.player} shuffles their graveyard back into their library`);
       break;
     }
     case "PASS": {

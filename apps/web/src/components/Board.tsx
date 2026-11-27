@@ -242,6 +242,17 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
         <label className="ml-auto text-[0.85rem] dim">
           <input type="checkbox" checked={stopEverywhere} onChange={onToggleStops} /> stop at every step
         </label>
+        {!state.over && (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              if (window.confirm("Surrender this game?")) act({ type: "CONCEDE", player: HUMAN });
+            }}
+          >
+            Surrender
+          </button>
+        )}
         <button type="button" className="btn" onClick={onNewGame}>
           New game
         </button>
@@ -323,6 +334,15 @@ export function Board({ rules, state, seed, stopEverywhere, onToggleStops, onAct
                 </>
               )}
               {!aiming && state.pending === "discard" && myDecision && <span>Choose a card from your hand to discard</span>}
+              {!aiming && !state.pending && myDecision && me && me.library.length === 0 && me.graveyard.length > 0 && (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => act({ type: "RECLAIM_GRAVEYARD", player: HUMAN })}
+                >
+                  Reclaim graveyard ({me.graveyard.length} cards back to your library)
+                </button>
+              )}
               {!aiming && !state.pending && myDecision && (
                 <button
                   type="button"
