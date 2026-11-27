@@ -124,57 +124,102 @@ export function declareAttackers(rules: Ruleset, state: GameState, attackers: Ca
   state.combat = { attackers: [...attackers], blocks: [] };
 }
 
+const onBattlefield = (state: GameState, id: CardId) =>
+  state.order.some((pid) => state.players[pid]?.battlefield.includes(id));
+
 /**
- * Deal combat damage simultaneously. An attacker with several blockers assigns lethal
- * damage to each in declaration order, with any excess going to the last blocker.
- * (First strike, trample and manual damage assignment are not modelled yet.)
+ * Deal combat damage. First-strike creatures deal theirs in a first step; anything they
+ * kill is removed before the regular step, where everything else deals damage. An attacker
+ * with several blockers assigns lethal damage to each in declaration order, with any excess
+ * going to the last blocker, or to the defending player if the attacker has trample. A
+ * blocked attacker whose blockers are all gone deals no damage unless it has trample.
+ * (Double strike and manual damage assignment are not modelled yet.)
  */
 export function resolveCombatDamage(rules: Ruleset, state: GameState): void {
   const combat = state.combat;
   if (!combat) return;
   const power = (id: CardId) => effectivePower(rules, state, id);
   const toughness = (id: CardId) => effectiveToughness(rules, state, id);
+  const defenderId = defendingPlayer(state);
 
-  const dealt: Record<CardId, number> = {};
-  const deathtouched = new Set<CardId>();
-  const add = (id: CardId, n: number, source: CardId) => {
-    if (n <= 0) return;
-    dealt[id] = (dealt[id] ?? 0) + n;
-    if (hasKeyword(rules, state, source, "deathtouch")) deathtouched.add(id);
+  const step = (first: boolean) => {
+    const acts = (id: CardId) => hasKeyword(rules, state, id, "first_strike") === first;
+    const dealt: Record<CardId, number> = {};
+    const deathtouched = new Set<CardId>();
+    const lifeGain: Record<PlayerId, number> = {};
+    const add = (id: CardId, n: number, source: CardId) => {
+      if (n <= 0) return;
+      dealt[id] = (dealt[id] ?? 0) + n;
+      if (hasKeyword(rules, state, source, "deathtouch")) deathtouched.add(id);
+    };
+    const lifelink = (source: CardId, n: number) => {
+      const owner = state.cards[source]?.owner;
+      if (owner && n > 0 && hasKeyword(rules, state, source, "lifelink")) lifeGain[owner] = (lifeGain[owner] ?? 0) + n;
+    };
+    let toPlayer = 0;
+
+    for (const attacker of combat.attackers) {
+      if (!onBattlefield(state, attacker)) continue;
+      const declared = combat.blocks.filter((b) => b.attacker === attacker).map((b) => b.blocker);
+      const blockers = declared.filter((id) => onBattlefield(state, id));
+      const trample = hasKeyword(rules, state, attacker, "trample");
+      const attackerActs = acts(attacker);
+
+      if (declared.length === 0 || (blockers.length === 0 && trample)) {
+        if (attackerActs) {
+          toPlayer += power(attacker);
+          lifelink(attacker, power(attacker));
+        }
+        continue;
+      }
+
+      let remaining = power(attacker);
+      const attackerDeathtouch = hasKeyword(rules, state, attacker, "deathtouch");
+      blockers.forEach((blocker, i) => {
+        const isLast = i === blockers.length - 1;
+        if (attackerActs) {
+          const remainingToughness = Math.max(0, toughness(blocker) - (state.cards[blocker]?.damage ?? 0));
+          const lethal = attackerDeathtouch ? Math.min(1, remainingToughness) : remainingToughness;
+          const assigned = isLast && !trample ? remaining : Math.min(remaining, lethal);
+          add(blocker, assigned, attacker);
+          lifelink(attacker, assigned);
+          remaining -= assigned;
+        }
+        if (acts(blocker)) {
+          add(attacker, power(blocker), blocker);
+          lifelink(blocker, power(blocker));
+        }
+      });
+      if (attackerActs && trample && remaining > 0) {
+        toPlayer += remaining;
+        lifelink(attacker, remaining);
+      }
+    }
+
+    const defender = state.players[defenderId];
+    if (defender && toPlayer > 0) {
+      defender.life -= toPlayer;
+      state.log.push(`${defenderId} takes ${toPlayer} combat damage`);
+    }
+    for (const [id, n] of Object.entries(dealt)) {
+      const inst = state.cards[id];
+      if (inst) {
+        inst.damage += n;
+        if (deathtouched.has(id)) inst.deathtouch = true;
+      }
+    }
+    for (const [pid, n] of Object.entries(lifeGain)) {
+      const p = state.players[pid];
+      if (p) {
+        p.life += n;
+        state.log.push(`${pid} gains ${n} life`);
+      }
+    }
   };
-  let toPlayer = 0;
 
-  for (const attacker of combat.attackers) {
-    const blockers = combat.blocks.filter((b) => b.attacker === attacker).map((b) => b.blocker);
-    if (blockers.length === 0) {
-      toPlayer += power(attacker);
-      continue;
-    }
-    let remaining = power(attacker);
-    const attackerDeathtouch = hasKeyword(rules, state, attacker, "deathtouch");
-    blockers.forEach((blocker, i) => {
-      const isLast = i === blockers.length - 1;
-      const remainingToughness = Math.max(0, toughness(blocker) - (state.cards[blocker]?.damage ?? 0));
-      const lethal = attackerDeathtouch ? Math.min(1, remainingToughness) : remainingToughness;
-      const assigned = isLast ? remaining : Math.min(remaining, lethal);
-      add(blocker, assigned, attacker);
-      remaining -= assigned;
-      add(attacker, power(blocker), blocker);
-    });
-  }
-
-  const defender = state.players[defendingPlayer(state)];
-  if (defender && toPlayer > 0) {
-    defender.life -= toPlayer;
-    state.log.push(`${defendingPlayer(state)} takes ${toPlayer} combat damage`);
-  }
-  for (const [id, n] of Object.entries(dealt)) {
-    const inst = state.cards[id];
-    if (inst) {
-      inst.damage += n;
-      if (deathtouched.has(id)) inst.deathtouch = true;
-    }
-  }
+  step(true);
+  destroyDeadCreatures(rules, state); // first strikers may kill before the regular step
+  step(false);
 }
 
 /**

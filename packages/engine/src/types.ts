@@ -34,6 +34,7 @@ export type Effect =
   | { kind: "gain_life"; amount: number; target: PlayerTargetSpec }
   | { kind: "destroy"; target: "creature" }
   | { kind: "discard"; amount: number; target: PlayerTargetSpec }
+  | { kind: "lose_life"; amount: number; target: PlayerTargetSpec }
   | { kind: "pump"; power: number; toughness: number; target: ChosenTargetSpec; duration: "until_end_of_turn" };
 
 /** A target picked when a spell is cast. */
@@ -42,11 +43,11 @@ export type Target = { kind: "player"; id: PlayerId } | { kind: "card"; id: Card
 export type CardType = "land" | "creature" | "instant" | "sorcery";
 
 /**
- * What an activated ability costs. A single kind today ("tap" the source); more
- * (sacrifice, discard, mana) slot in here later without touching anything that
- * already works. `Ability.cost` is an array since real costs can combine several.
+ * What an activated ability costs: "tap" the source and/or pay mana. More kinds
+ * (sacrifice, discard, life) slot in here later without touching anything that
+ * already works. `Ability.cost` is an array since real costs combine several.
  */
-export type Cost = { kind: "tap" };
+export type Cost = { kind: "tap" } | { kind: "mana"; cost: ManaCost };
 
 export interface Ability {
   cost: Cost[];
@@ -61,6 +62,9 @@ export interface Ability {
  * menace: can't be blocked except by two or more creatures.
  * skulk: can't be blocked by creatures with greater power.
  * cant_block: this creature can't block.
+ * lifelink: combat damage it deals also gains its controller that much life.
+ * first_strike: deals combat damage before creatures without it.
+ * trample: lethal damage to its blockers, the rest goes to the defending player.
  */
 export type Keyword =
   | "haste"
@@ -70,7 +74,10 @@ export type Keyword =
   | "fear"
   | "menace"
   | "skulk"
-  | "cant_block";
+  | "cant_block"
+  | "lifelink"
+  | "first_strike"
+  | "trample";
 
 /** A card definition. `game` lets one engine host cards from different games. */
 export interface CardDef {

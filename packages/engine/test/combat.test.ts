@@ -346,3 +346,55 @@ describe("evasion keywords", () => {
     });
   });
 });
+
+describe("first strike, trample and lifelink", () => {
+  const fight = (attacker: string, blocker: string | null) => {
+    const { s, p1Ids, p2Ids } = atAttackers([attacker], blocker ? [blocker] : []);
+    const [a] = p1Ids as [CardId];
+    const [b] = p2Ids;
+    let g = passRound(ok(s, { type: "DECLARE_ATTACKERS", player: "p1", attackers: [a] }));
+    if (b) g = ok(g, { type: "DECLARE_BLOCKERS", player: "p2", blocks: [{ blocker: b, attacker: a }] });
+    g = passRound(g);
+    return { g, a, b };
+  };
+
+  it("first strike kills a blocker before it can deal damage back", () => {
+    const { g, a, b } = fight("fencer", "bear");
+    expect(g.players.p2?.graveyard).toContain(b);
+    expect(g.players.p1?.battlefield).toContain(a);
+    expect(g.cards[a]?.damage).toBe(0);
+  });
+
+  it("a first-strike blocker kills the attacker first too", () => {
+    const { g, a, b } = fight("bear", "fencer");
+    expect(g.players.p1?.graveyard).toContain(a);
+    expect(g.players.p2?.battlefield).toContain(b as CardId);
+    expect(g.cards[b as CardId]?.damage).toBe(0);
+  });
+
+  it("first strikers still trade with creatures that survive the first step", () => {
+    const { g, a, b } = fight("fencer", "giant");
+    expect(g.players.p1?.graveyard).toContain(a);
+    expect(g.cards[b as CardId]?.damage).toBe(2);
+  });
+
+  it("trample sends the excess damage to the defending player", () => {
+    const { g, a, b } = fight("rhino", "bear");
+    expect(g.players.p2?.graveyard).toContain(b);
+    expect(g.players.p2?.life).toBe(19);
+    expect(g.players.p1?.battlefield).toContain(a);
+  });
+
+  it("without trample a blocked attacker deals nothing to the player", () => {
+    const { g } = fight("giant", "bear");
+    expect(g.players.p2?.life).toBe(20);
+  });
+
+  it("lifelink gains life for combat damage to a player and to a creature", () => {
+    const unblocked = fight("leech", null).g;
+    expect(unblocked.players.p1?.life).toBe(22);
+    expect(unblocked.players.p2?.life).toBe(18);
+    const blocked = fight("leech", "bear").g;
+    expect(blocked.players.p1?.life).toBe(22);
+  });
+});

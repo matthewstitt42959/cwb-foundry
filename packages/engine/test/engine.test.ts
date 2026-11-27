@@ -319,6 +319,37 @@ describe("activated abilities", () => {
   });
 });
 
+describe("abilities with mana costs", () => {
+  function withPinger() {
+    let s = passUntilPhase(newGame(), "main1");
+    const p = give(s, "p1", "pinger", "battlefield");
+    const m = give(p.state, "p1", "mountain", "battlefield");
+    return { s: m.state, pinger: p.id, mountain: m.id };
+  }
+
+  it("pays mana by tapping a land, then resolves like any other ability", () => {
+    const { s, pinger, mountain } = withPinger();
+    let g = ok(s, { type: "ACTIVATE", player: "p1", cardId: pinger, abilityIndex: 0 });
+    expect(g.cards[mountain]?.tapped).toBe(true);
+    expect(g.cards[pinger]?.tapped).toBe(false); // no {T} in the cost
+    g = ok(g, { type: "PASS", player: "p1" });
+    g = ok(g, { type: "PASS", player: "p2" });
+    expect(g.players.p2?.life).toBe(18);
+  });
+
+  it("is rejected, and not offered, when the mana can't be paid", () => {
+    const { s, pinger, mountain } = withPinger();
+    const tapped = clone(s);
+    (tapped.cards[mountain] as { tapped: boolean }).tapped = true;
+    expect(applyAction(rules, tapped, { type: "ACTIVATE", player: "p1", cardId: pinger, abilityIndex: 0 })).toEqual({
+      ok: false,
+      error: "Cannot pay the cost",
+    });
+    expect(getLegalActions(rules, tapped).some((a) => a.type === "ACTIVATE")).toBe(false);
+    expect(getLegalActions(rules, s).some((a) => a.type === "ACTIVATE")).toBe(true);
+  });
+});
+
 describe("purity and legal actions", () => {
   it("never mutates the input state, even on illegal actions", () => {
     const s = newGame();

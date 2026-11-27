@@ -1,4 +1,4 @@
-import type { CardDef, CardDefs, Color, Effect, ManaCost } from "@cwb/engine";
+import type { CardDef, CardDefs, Color, Cost, Effect, ManaCost } from "@cwb/engine";
 
 /**
  * Starter set. Names and numbers are original to this project.
@@ -172,6 +172,8 @@ function effectText(e: Effect): string {
       return `${cap(who(e.target))} gain${e.target === "self" ? "" : "s"} ${e.amount} life.`;
     case "destroy":
       return "Destroy target creature.";
+    case "lose_life":
+      return `${cap(who(e.target))} lose${e.target === "self" ? "" : "s"} ${e.amount} life.`;
     case "discard":
       return `${cap(who(e.target))} discard${e.target === "self" ? "" : "s"} ${e.amount} card${e.amount === 1 ? "" : "s"}.`;
     case "pump": {
@@ -186,8 +188,14 @@ function effectText(e: Effect): string {
   }
 }
 
-function costText(costs: { kind: string }[]): string {
-  return costs.map((c) => (c.kind === "tap" ? "{T}" : c.kind)).join(", ");
+function costText(costs: Cost[]): string {
+  return costs
+    .map((c) => {
+      if (c.kind === "tap") return "{T}";
+      const generic = c.cost.generic ? `{${c.cost.generic}}` : "";
+      return generic + (["W", "U", "B", "R", "G"] as const).map((k) => `{${k}}`.repeat(c.cost[k] ?? 0)).join("");
+    })
+    .join(", ");
 }
 
 export function cardText(def: CardDef): string {
@@ -200,6 +208,7 @@ export function cardText(def: CardDef): string {
 
 function keywordText(k: string): string {
   if (k === "cant_block") return "Can't block";
+  if (k === "first_strike") return "First strike";
   return cap(k);
 }
 

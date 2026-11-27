@@ -184,13 +184,14 @@ function beginDiscard(state: GameState, effect: Extract<Effect, { kind: "discard
 
 /**
  * Can every component of this ability's cost currently be paid? A {T} cost needs the
- * source untapped and, like attacking, not summoning sick unless it has haste.
+ * source untapped and, like attacking, not summoning sick unless it has haste. A mana
+ * cost needs untapped lands that can pay it.
  */
-function canPayCost(rules: Ruleset, state: GameState, sourceId: CardId, costs: Cost[]): boolean {
+function canPayCost(rules: Ruleset, state: GameState, player: PlayerId, sourceId: CardId, costs: Cost[]): boolean {
   const inst = state.cards[sourceId];
   if (!inst) return false;
   return costs.every((cost) => {
-    if (cost.kind !== "tap") return true;
+    if (cost.kind === "mana") return planPayment(rules, state, player, cost.cost) !== null;
     if (inst.tapped) return false;
     const hasHaste = rules.defs[inst.defId]?.keywords?.includes("haste") ?? false;
     return inst.enteredTurn < state.turn || hasHaste;
@@ -198,11 +199,18 @@ function canPayCost(rules: Ruleset, state: GameState, sourceId: CardId, costs: C
 }
 
 /** Pays an already-validated cost. */
-function payCost(state: GameState, sourceId: CardId, costs: Cost[]): void {
+function payCost(rules: Ruleset, state: GameState, player: PlayerId, sourceId: CardId, costs: Cost[]): void {
   const inst = state.cards[sourceId];
   if (!inst) return;
   for (const cost of costs) {
-    if (cost.kind === "tap") inst.tapped = true;
+    if (cost.kind === "tap") {
+      inst.tapped = true;
+    } else {
+      for (const id of planPayment(rules, state, player, cost.cost) ?? []) {
+        const land = state.cards[id];
+        if (land) land.tapped = true;
+      }
+    }
   }
 }
 
@@ -330,7 +338,7 @@ export function validateAction(rules: Ruleset, state: GameState, action: Action)
     const def = inst && rules.defs[inst.defId];
     const ability = def?.abilities?.[action.abilityIndex];
     if (!ability) return "No such ability";
-    if (!canPayCost(rules, state, action.cardId, ability.cost)) return "Cannot pay the cost";
+    if (!canPayCost(rules, state, action.player, action.cardId, ability.cost)) return "Cannot pay the cost";
     const spec = targetSpecOfEffect(ability.effect);
     const targets = action.targets ?? [];
     if (spec) {
@@ -432,7 +440,7 @@ export function getLegalActions(rules: Ruleset, state: GameState): Action[] {
     const inst = state.cards[cardId];
     const def = inst && rules.defs[inst.defId];
     def?.abilities?.forEach((ability, abilityIndex) => {
-      if (!canPayCost(rules, state, cardId, ability.cost)) return;
+      if (!canPayCost(rules, state, player, cardId, ability.cost)) return;
       const spec = targetSpecOfEffect(ability.effect);
       if (spec) {
         for (const t of legalTargetsForSpec(rules, state, spec)) {
@@ -511,7 +519,7 @@ export function applyAction(rules: Ruleset, state: GameState, action: Action): A
       const def = inst && rules.defs[inst.defId];
       const ability = def?.abilities?.[action.abilityIndex];
       if (!inst || !ability) return { ok: false, error: "No such ability" };
-      payCost(next, action.cardId, ability.cost);
+      payCost(rules, next, action.player, action.cardId, ability.cost);
       next.stack.push({
         kind: "ability",
         sourceId: action.cardId,

@@ -1,4 +1,4 @@
-import type { Ability, CardDef, CardType, Effect, Keyword, ManaCost } from "@cwb/engine";
+import type { Ability, CardDef, CardType, Cost, Effect, Keyword, ManaCost } from "@cwb/engine";
 import type { ScryfallCard } from "./types";
 
 /**
@@ -23,6 +23,9 @@ const SUPPORTED_KEYWORDS: Record<string, Keyword> = {
   fear: "fear",
   menace: "menace",
   skulk: "skulk",
+  lifelink: "lifelink",
+  trample: "trample",
+  "first strike": "first_strike",
 };
 
 const BASIC_COLORS = ["W", "U", "B", "R", "G"] as const;
@@ -81,6 +84,10 @@ function parseClause(clause: string): Effect | null {
   if ((m = clause.match(/^~ deals (\d+) damage to (?:target opponent|target player|target player or planeswalker|each opponent)$/))) {
     return { kind: "damage", amount: Number(m[1]), target: "opponent" };
   }
+  if ((m = clause.match(/^(?:target|each) opponent loses (\w+) life$/))) {
+    const n = parseCount(m[1] ?? "");
+    return n ? { kind: "lose_life", amount: n, target: "opponent" } : null;
+  }
   if (clause === "destroy target creature") return { kind: "destroy", target: "creature" };
   if ((m = clause.match(/^you gain (\w+) life$/))) {
     const n = parseCount(m[1] ?? "");
@@ -107,12 +114,28 @@ function parseClause(clause: string): Effect | null {
   return null;
 }
 
-/** Parses a single tap-cost activated ability line, e.g. "{T}: <effect clause>.". */
+/**
+ * Parses an activated ability line: comma-separated costs ({T} and/or mana such as
+ * "{5}{B}"), a colon, then one effect clause. Any other cost (sacrifice, discard, life,
+ * X, hybrid mana...) makes the whole line unsupported.
+ */
 function parseActivatedAbility(normalizedLine: string): Ability | null {
-  const m = normalizedLine.match(/^\{t\}:\s*(.+?)\.?$/i);
+  const m = normalizedLine.match(/^([^:]+):\s*(.+?)\.?$/);
   if (!m) return null;
-  const effect = parseClause((m[1] ?? "").trim().toLowerCase());
-  return effect ? { cost: [{ kind: "tap" }], effect } : null;
+  const cost: Cost[] = [];
+  for (const part of (m[1] ?? "").split(/,\s*/)) {
+    if (/^\{t\}$/i.test(part)) {
+      cost.push({ kind: "tap" });
+    } else if (/^(\{[^}]+\})+$/.test(part)) {
+      const { cost: mana, problems } = parseManaCost(part);
+      if (problems.length > 0) return null;
+      cost.push({ kind: "mana", cost: mana });
+    } else {
+      return null;
+    }
+  }
+  const effect = parseClause((m[2] ?? "").trim().toLowerCase());
+  return effect ? { cost, effect } : null;
 }
 
 function escapeRegExp(s: string): string {

@@ -183,7 +183,16 @@ function decideMain(rules: Ruleset, state: GameState, me: PlayerId, legal: Actio
     const score = scoreSpell(rules, state, me, opp, def, a, oppLife, myLife);
     if (score > 0 && (!best || score > best.score)) best = { action: a, score };
   }
-  return best?.action ?? null;
+  if (best) return best.action;
+
+  // Nothing worth casting: spend spare mana on "lose life" abilities.
+  return (
+    legal.find((a) => {
+      if (a.type !== "ACTIVATE") return false;
+      const effect = defOf(rules, state, a.cardId)?.abilities?.[a.abilityIndex]?.effect;
+      return effect?.kind === "lose_life" && effect.target === "opponent";
+    }) ?? null
+  );
 }
 
 function scoreSpell(
@@ -245,11 +254,15 @@ function scoreSpell(
 }
 
 /**
- * Only knows how to use one shape so far: a negative "pump" (debuff) aimed at an
- * opponent's creature, worth using if it's lethal on its own (e.g. Rabid Rats' -1/-1
- * finishing off a blocker). Anything else scores 0 (not worth activating for).
+ * Knows two shapes: a negative "pump" (debuff) aimed at an opponent's creature, worth
+ * using if it's lethal on its own (e.g. Rabid Rats' -1/-1 finishing off a blocker), and
+ * "lose life" for the opponent when it's lethal. Anything else scores 0.
  */
 function scoreAbility(rules: Ruleset, state: GameState, me: PlayerId, effect: Effect, target?: Target): number {
+  if (effect.kind === "lose_life") {
+    // Only worth interrupting everything else when it's lethal; otherwise decideMain spends spare mana on it.
+    return effect.target === "opponent" && effect.amount >= (state.players[opponentOf(state, me)]?.life ?? 20) ? 1000 : 0;
+  }
   if (effect.kind !== "pump" || effect.power > 0 || effect.toughness > 0) return 0;
   if (!target || target.kind !== "card") return 0;
   if (state.cards[target.id]?.owner === me) return -1; // never weaken our own creature

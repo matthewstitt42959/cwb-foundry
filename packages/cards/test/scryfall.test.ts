@@ -100,6 +100,19 @@ describe("convertScryfallCard: supported cards", () => {
     expect(convert("Nezumi Cutthroat").def?.keywords).toEqual(["fear", "cant_block"]);
   });
 
+  it("converts a mana-cost activated ability with a lose-life effect", () => {
+    expect(convert("Engine Rat").def).toMatchObject({
+      keywords: ["deathtouch"],
+      abilities: [{ cost: [{ kind: "mana", cost: { generic: 5, B: 1 } }], effect: { kind: "lose_life", amount: 2, target: "opponent" } }],
+    });
+  });
+
+  it("converts lifelink, first strike and trample", () => {
+    expect(convert("Child of Night").def?.keywords).toEqual(["lifelink"]);
+    expect(convert("Knight of Meadowgrain").def?.keywords).toEqual(["first_strike", "lifelink"]);
+    expect(convert("Charging Badger").def?.keywords).toEqual(["trample"]);
+  });
+
   it("converts removal, card draw and compound spells", () => {
     expect(convert("Murder").def?.effects).toEqual([{ kind: "destroy", target: "creature" }]);
     expect(convert("Divination").def?.effects).toEqual([{ kind: "draw", amount: 2, target: "self" }]);

@@ -108,6 +108,10 @@ export function applyEffect(
       p.life -= effect.amount;
       state.log.push(`${who} takes ${effect.amount} damage`);
       break;
+    case "lose_life":
+      p.life -= effect.amount;
+      state.log.push(`${who} loses ${effect.amount} life`);
+      break;
     case "gain_life":
       p.life += effect.amount;
       state.log.push(`${who} gains ${effect.amount} life`);
