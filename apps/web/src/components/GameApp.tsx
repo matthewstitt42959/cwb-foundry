@@ -10,7 +10,8 @@ import {
   type ImportCache,
   type ImportedDeck,
 } from "@cwb/cards";
-import { autoplay, BOT, HUMAN, makeRules } from "../lib/driver";
+import { autoplay, BOT, HUMAN, makeRules, type BotPlay } from "../lib/driver";
+import { CardView } from "./CardView";
 import { Board } from "./Board";
 
 interface Session {
@@ -19,6 +20,8 @@ interface Session {
   /** Bumped on every engine step; used as the Board's key so UI selections never outlive their state. */
   version: number;
   seed: number;
+  /** What the AI has played since you last closed the popup, oldest first. */
+  plays: BotPlay[];
 }
 
 const IMPORTED = "imported";
@@ -371,7 +374,9 @@ export function GameApp() {
       decks: { [HUMAN]: mine.cards, [BOT]: theirs.cards },
       seed,
     });
-    setSession({ rules, state: autoplay(rules, initial, { stopEverywhere }), version: 0, seed });
+    const plays: BotPlay[] = [];
+    const state = autoplay(rules, initial, { stopEverywhere, onBotPlay: (p) => plays.push(p) });
+    setSession({ rules, state, version: 0, seed, plays });
   };
 
   const onAction = (action: Action) => {
@@ -379,7 +384,9 @@ export function GameApp() {
       if (!cur) return cur;
       const r = applyAction(cur.rules, cur.state, action);
       if (!r.ok) return cur;
-      return { ...cur, version: cur.version + 1, state: autoplay(cur.rules, r.state, { stopEverywhere }) };
+      const plays = [...cur.plays];
+      const state = autoplay(cur.rules, r.state, { stopEverywhere, onBotPlay: (p) => plays.push(p) });
+      return { ...cur, version: cur.version + 1, state, plays };
     });
   };
 
@@ -404,17 +411,49 @@ export function GameApp() {
   };
 
   if (session) {
+    const play = session.plays[0];
+    const playDef = play ? session.rules.defs[play.defId] : undefined;
+    const targetName = (t: string) => session.rules.defs[t]?.name ?? t;
     return (
-      <Board
-        key={session.version}
-        rules={session.rules}
-        state={session.state}
-        seed={session.seed}
-        stopEverywhere={stopEverywhere}
-        onToggleStops={() => setStopEverywhere((v) => !v)}
-        onAction={onAction}
-        onNewGame={() => setSession(null)}
-      />
+      <>
+        <Board
+          key={session.version}
+          rules={session.rules}
+          state={session.state}
+          seed={session.seed}
+          stopEverywhere={stopEverywhere}
+          onToggleStops={() => setStopEverywhere((v) => !v)}
+          onAction={onAction}
+          onNewGame={() => setSession(null)}
+        />
+        {play && playDef && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+            role="dialog"
+            aria-label="Opponent played a card"
+            onClick={() => setSession((cur) => (cur ? { ...cur, plays: cur.plays.slice(1) } : cur))}
+          >
+            <div
+              className="flex flex-col items-center gap-3 rounded-[10px] border border-[var(--line)] bg-[var(--panel)] p-5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-[0.95rem]">
+                Opponent {play.verb} <strong>{playDef.name}</strong>
+                {play.targets.length > 0 && <> on {play.targets.map(targetName).join(", ")}</>}
+              </p>
+              <CardView def={playDef} />
+              <button
+                type="button"
+                className="btn primary"
+                autoFocus
+                onClick={() => setSession((cur) => (cur ? { ...cur, plays: cur.plays.slice(1) } : cur))}
+              >
+                {session.plays.length > 1 ? `Close (${session.plays.length - 1} more)` : "Close"}
+              </button>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 

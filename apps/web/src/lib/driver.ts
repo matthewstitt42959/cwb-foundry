@@ -1,6 +1,7 @@
 import {
   applyAction,
   getLegalActions,
+  type Action,
   validateAction,
   mtgPack,
   type CardDefs,
@@ -21,6 +22,26 @@ export function makeRules(extraDefs: CardDefs = {}): Ruleset {
 export interface DriverOptions {
   /** If true, the human gets priority at every step. If false, empty steps are skipped. */
   stopEverywhere: boolean;
+  /** Called for each spell the bot casts or ability it activates, so the UI can show it. */
+  onBotPlay?: (play: BotPlay) => void;
+}
+
+/** Something the bot cast or activated, for the "opponent played" popup. */
+export interface BotPlay {
+  verb: "casts" | "activates";
+  defId: string;
+  /** Names of what it was aimed at, if anything. */
+  targets: string[];
+}
+
+function describePlay(state: GameState, action: Action): BotPlay | null {
+  if (action.type !== "CAST" && action.type !== "ACTIVATE") return null;
+  const inst = state.cards[action.cardId];
+  if (!inst) return null;
+  const targets = (action.targets ?? []).map((t) =>
+    t.kind === "player" ? (t.id === HUMAN ? "you" : "itself") : (state.cards[t.id]?.defId ?? "a creature"),
+  );
+  return { verb: action.type === "CAST" ? "casts" : "activates", defId: inst.defId, targets };
 }
 
 /**
@@ -33,8 +54,11 @@ export function autoplay(rules: Ruleset, state: GameState, opts: DriverOptions):
   let s = state;
   for (let i = 0; i < 2000 && !s.over; i++) {
     if (s.priority === BOT) {
-      const r = applyAction(rules, s, chooseAction(rules, s));
+      const action = chooseAction(rules, s);
+      const r = applyAction(rules, s, action);
       if (!r.ok) throw new Error(`Bot chose an illegal action: ${r.error}`);
+      const play = describePlay(s, action);
+      if (play) opts.onBotPlay?.(play);
       s = r.state;
       continue;
     }
